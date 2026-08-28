@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Visual redesign (2026-08-28) =====
+   New token system only — every selector, functional property (display,
+   position, overflow, z-index, white-space, grid/flex structure) and the
+   entire @media print block are preserved exactly as they were. Nothing
+   here changes what any element IS or DOES, only its color, roundness,
+   and shadow — since dozens of tests assert those functional properties
+   and several real bugs were fixed by getting them exactly right, this
+   redesign deliberately does not touch them.
+   Palette: cool indigo/lavender system replacing the warm brown/ivory one.
+   --ink:#1e2233 --muted:#8a8fa8 --bg:#eef0f9 --paper:#ffffff
+   --line:#e4e7f5 --indigo:#5b5fef --indigo-dark:#4347c4 --rose:#f4a6c1
+   --green:#1fa971 --red:#e5566b --amber:#e8a23d
+   Type: Inter, unchanged (already a clean modern sans) — weight contrast
+   pushed harder (800/900 for headings vs 400/500 body) for more presence.
+   Signature: fully rounded "pill" treatment on buttons, badges, and the
+   active sidebar item; larger 18–20px card radius; soft cool-toned shadow. */
+:root{--ink:#1e2233;--muted:#8a8fa8;--ivory:#eef0f9;--paper:#ffffff;--line:#e4e7f5;--brown:#5b5fef;--brown2:#4347c4;--gold:#5b5fef;--green:#1fa971;--red:#e5566b;--blue:#5b5fef;--shadow:0 10px 30px rgba(30,34,51,.09)}*{box-sizing:border-box}html{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--ivory)}body{margin:0;font-size:14px}.shell{min-height:100vh}.sidebar{position:fixed;inset:0 auto 0 0;width:245px;background:#181b2e;color:#eef0f9;z-index:20;overflow:auto}.brand{height:78px;display:flex;align-items:center;gap:12px;padding:15px 20px;color:#fff;text-decoration:none;border-bottom:1px solid #2a2e47}.brand-mark{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,#7c7ff5,#5b5fef);font-weight:800;color:white;box-shadow:0 6px 20px #5b5fef4d}.brand span:last-child{display:flex;flex-direction:column}.brand small{color:#a7abc9;margin-top:2px}.nav{padding:10px}.nav p{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#8286a8;margin:20px 11px 6px}.nav a{display:block;padding:10px 14px;margin:2px 0;border-radius:12px;color:#c7cae3;text-decoration:none;font-weight:600}.nav a:hover{background:#242849;color:#fff}.nav a.active{background:var(--brown);color:#fff;box-shadow:0 4px 14px #5b5fef4d}.main{margin-left:245px;min-height:100vh}.topbar{height:78px;background:var(--paper);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 28px;position:sticky;top:0;z-index:10}.topbar h1{font-size:21px;margin:0;font-weight:800}.topbar small{color:var(--muted)}.user{margin-left:auto;display:flex;align-items:center;gap:15px}.link{border:0;background:none;color:var(--brown);cursor:pointer;font-weight:700}.menu{display:none;border:0;background:none;font-size:22px}.content{padding:26px;max-width:1600px;margin:auto}.grid{display:grid;gap:18px}.grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.stats{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:20px}.card,.stat{background:var(--paper);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}.card{padding:22px}.card-header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px}.card-header h2,.card h2{margin:0;font-size:17px;font-weight:800}.stat{padding:18px}.stat small{color:var(--muted);display:block}.stat strong{display:block;font-size:25px;margin-top:8px;font-weight:800}.stat em{font-style:normal;color:var(--brown);font-size:12px;font-weight:700}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.toolbar form,.filters{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);border-radius:99px;padding:9px 16px;background:white;color:var(--ink);font-weight:700;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}.btn:hover{filter:brightness(.97)}.btn.primary{background:var(--brown);border-color:var(--brown);color:white;box-shadow:0 4px 14px #5b5fef4d}.btn.success{background:var(--green);border-color:var(--green);color:white}.btn.danger{background:var(--red);border-color:var(--red);color:white}.btn.small{padding:6px 12px;font-size:12px}.btn.full{width:100%}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:16px;background:white}table{width:100%;border-collapse:collapse;white-space:nowrap}th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:#f6f7fc;font-weight:800}th,td{padding:13px 14px;border-bottom:1px solid var(--line)}tr:last-child td{border-bottom:0}tr:hover td{background:#f9f9fe}a{color:var(--brown)}.badge{display:inline-flex;border-radius:99px;padding:4px 11px;background:#eceefa;font-size:11px;font-weight:800;text-transform:capitalize}.badge.green{background:#dcf5ea;color:#137a4e}.badge.red{background:#fce3e8;color:#b9334a}.badge.blue{background:#e3e8fc;color:#3538a8}.badge.amber{background:#fbeed9;color:#9a660f}.alert{padding:13px 16px;border-radius:14px;margin-bottom:18px}.alert.success{background:#dcf5ea;color:#137a4e}.alert.danger{background:#fce3e8;color:#a52540}.alert ul{margin:6px 0 0;padding-left:20px}.stack{display:flex;flex-direction:column;gap:15px}label{font-weight:700;color:#333752;display:block}label small{font-weight:400;color:var(--muted)}input,select,textarea{width:100%;margin-top:6px;border:1px solid #d7daf0;border-radius:12px;background:white;padding:10px 12px;font:inherit;color:inherit;outline:none}input:focus,select:focus,textarea:focus{border-color:var(--brown);box-shadow:0 0 0 3px #5b5fef22}textarea{min-height:90px;resize:vertical}.check{display:flex;align-items:center;gap:8px;font-weight:500}.check input{width:auto;margin:0}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.span-2{grid-column:span 2}.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}.muted{color:var(--muted)}.amount{font-variant-numeric:tabular-nums;font-weight:700}.kpi-good{color:var(--green)}.kpi-bad{color:var(--red)}.empty{text-align:center;padding:35px;color:var(--muted)}.pagination{display:flex;list-style:none;gap:5px;padding:0}.page-link{display:block;padding:7px 12px;border:1px solid var(--line);border-radius:99px;text-decoration:none}.active>.page-link{background:var(--brown);color:white}.guest{min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at top,#ffffff 0,#e6e9f9 75%);padding:20px}.auth-card{width:min(430px,100%);background:white;border:1px solid var(--line);border-radius:24px;padding:32px;box-shadow:0 25px 80px #1e22331a}.auth-brand{text-align:center;margin-bottom:25px}.auth-brand .brand-mark{margin:0 auto 12px}.auth-brand h1{margin:0;font-size:25px;font-weight:800}.auth-brand p{color:var(--muted);margin:5px}.setup-note{padding:13px;background:#eef0fc;border-radius:14px;margin-bottom:18px}.setup-note p{margin:4px 0 0;color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.summary>div{padding:12px;background:#f6f7fc;border-radius:14px}.summary small{display:block;color:var(--muted)}.summary strong{font-size:16px;font-weight:800}.doc-header{display:flex;justify-content:space-between;gap:20px;padding-bottom:18px;border-bottom:2px solid var(--brown)}.mobile-nav{display:none}.kanban{display:grid;grid-template-columns:repeat(4,minmax(250px,1fr));gap:12px;overflow:auto}.kanban-col{background:#eceefa;border-radius:16px;padding:10px;min-height:180px}.job-card{background:white;border-radius:14px;padding:12px;margin-bottom:8px;box-shadow:0 2px 8px #1e223310}.health{display:flex;align-items:center;gap:10px;padding:13px;border-bottom:1px solid var(--line)}.dot{width:10px;height:10px;border-radius:50%}.dot.ok{background:var(--green)}.dot.warning{background:#e8a23d}.dot.error{background:var(--red)}@media(max-width:1100px){.stats{grid-template-columns:repeat(2,1fr)}.grid.cols-4{grid-template-columns:repeat(2,1fr)}}@media(max-width:800px){body{padding-bottom:62px}.sidebar{transform:translateX(-100%);transition:.2s}.sidebar.open{transform:none}.main{margin-left:0}.menu{display:block}.topbar{padding:0 15px;height:68px}.topbar .user span{display:none}.content{padding:15px}.grid.cols-2,.grid.cols-3,.grid.cols-4,.form-grid{grid-template-columns:1fr}.span-2{grid-column:auto}.stats{grid-template-columns:repeat(2,1fr);gap:10px}.stat{padding:14px}.stat strong{font-size:20px}.toolbar{align-items:stretch;flex-direction:column}.toolbar form>*{flex:1}.mobile-nav{position:fixed;display:flex;bottom:0;left:0;right:0;height:60px;background:white;border-top:1px solid var(--line);z-index:19;justify-content:space-around}.mobile-nav a,.mobile-nav button{flex:1;display:grid;place-items:center;border:0;background:white;color:var(--ink);font-size:11px;text-decoration:none}.table-wrap.mobile-cards{border:0;background:none}.mobile-cards table,.mobile-cards thead,.mobile-cards tbody,.mobile-cards th,.mobile-cards td,.mobile-cards tr{display:block}.mobile-cards thead{display:none}.mobile-cards tr{background:white;border:1px solid var(--line);border-radius:16px;padding:9px;margin-bottom:10px}.mobile-cards td{border:0;padding:5px 8px;white-space:normal}.mobile-cards td:before{content:attr(data-label);display:block;font-size:10px;text-transform:uppercase;color:var(--muted)}}@media print{.sidebar,.topbar,.mobile-nav,.no-print,.alert{display:none!important}.main{margin:0}.content{padding:0}.card{box-shadow:none;border:0}.doc-header{margin-top:0}body{background:white}.table-wrap{border:0;overflow:visible}.summary{display:block!important}.summary>div{display:inline-block;margin-right:18px}@page{size:A4;margin:14mm}}
+.document-a4{max-width:210mm;margin:0 auto}
+.doc-logo{max-height:64px;max-width:220px;display:block;margin-bottom:10px;object-fit:contain}
+.sidebar-logo{max-height:32px;max-width:150px;object-fit:contain}
+.auth-logo{max-height:56px;max-width:220px;display:block;margin:0 auto 12px;object-fit:contain}
+.doc-footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);text-align:center}
+/*
+  No forced break-avoidance here on purpose. An earlier attempt used
+  break-inside:avoid to keep the totals summary and signature together —
+  but that was then CONFIRMED (via a real screenshot showing a large
+  blank gap at the bottom of page 1) to actively cause an unwanted page 2
+  even when the content would otherwise fit on page 1. The explicit
+  priority is "everything on one page, only overflow to a new page if
+  there are genuinely too many products" — which means trusting normal
+  document flow, not forcing a block to jump pages together. In the rare
+  case content is right at the boundary, a natural split here is a far
+  better outcome than guaranteeing an entire wasted page.
+*/
+.doc-signature-block{text-align:left}
+.doc-signature{max-height:200px;max-width:640px;display:block;margin:0 0 6px 0;object-fit:contain}
+.doc-type-heading{font-size:26px;letter-spacing:.04em;text-transform:uppercase;color:var(--brown2);margin:0 0 16px}
+.doc-footer-text{font-size:12px}
+.branding-asset{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)}
+.branding-asset span{font-weight:700;min-width:140px}
+.product-thumb{width:40px;height:40px;object-fit:cover;border-radius:6px}
+.product-thumb-placeholder{display:inline-block;width:40px;height:40px;border-radius:6px;background:var(--line)}
+.product-preview{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--muted,#666)}
+.product-preview-thumb{width:28px;height:28px;object-fit:cover;border-radius:4px}
+.search-results{position:relative}
+.search-result:hover{background:var(--line)}
+.search-result img{width:24px;height:24px;object-fit:cover;border-radius:4px}
+.search-empty{padding:6px 8px;font-size:12px;color:var(--muted,#888)}
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.combo{position:relative}
+.combo-results{position:absolute;left:0;right:0;top:100%;z-index:40;background:white;border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);max-height:260px;overflow-y:auto;overflow-x:hidden;margin-top:2px;white-space:normal;min-width:280px}
+.combo-results:empty{display:none;border:0;box-shadow:none}
+.combo-input-row{display:flex;gap:6px;align-items:flex-start}
+.combo-input-row .combo{flex:1}
+/*
+  .search-result and its text must explicitly override the inherited
+  white-space:nowrap from the ancestor <table> (a real, confirmed bug —
+  the dropdown sits inside a <td>, so it silently inherited the table's
+  own nowrap rule, refusing to wrap the product name/SKU/price line and
+  forcing a horizontal scrollbar instead). Vertical scrolling for many
+  results is still fine — only horizontal is disallowed.
+*/
+.search-result{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;cursor:pointer;font-size:13px;white-space:normal}
+.search-result span{white-space:normal;word-break:break-word}
+/*
+  A .table-wrap with overflow:auto clips any position:absolute descendant
+  to its own bounds, per how CSS clipping containers work — this silently
+  cut off the combo search-results dropdown inside the order/quotation
+  items table (confirmed from a real screenshot: the dropdown showed its
+  own inner scrollbar and got cut mid-row instead of floating freely).
+  overflow-x:auto + overflow-y:visible is NOT a reliable fix here — the
+  CSS Overflow spec coerces a 'visible' value to 'auto' when the other
+  axis isn't visible, so the clipping would still happen. Turning off
+  clipping entirely for this specific wrapper (functional bug: an
+  unusable dropdown) is a better tradeoff than the alternative (a wide
+  table causing page-level horizontal scroll on very narrow screens).
+*/
+.items-table-wrap{overflow:visible}
+.product-thumb-inline{width:26px;height:26px;object-fit:cover;border-radius:4px;flex-shrink:0}
+.selected-chip{display:none;align-items:center;gap:8px;margin-top:6px;padding:5px 10px;background:#e2ece9;border-radius:6px;font-size:12.5px}
+.selected-chip.is-visible{display:inline-flex}
+.selected-chip img{width:22px;height:22px;object-fit:cover;border-radius:4px}
+.selected-chip button{border:none;background:none;cursor:pointer;color:var(--red);font-weight:700;margin-left:4px}
+

@@ -1,0 +1,49 @@
+Ivory Gifts ERP — cPanel full release
+Release date: 2026-08-26
+Application path: /home/ivorygif/ivory-accounts
+Public path: /home/ivorygif/public_html/accounts
+Minimum PHP: 8.4.1
+Install command: PHP_BIN=/opt/alt/php84/usr/bin/php bash deploy.sh
+
+New in this release:
+- Removed Production Board from all navigation (tables/model retained)
+- Product SKUs: no more "AUTO-" prefix, shortened to 6 characters,
+  manually settable on Add/Edit Product; existing SKUs unchanged
+- Order form: real customer/product search-as-you-type, product price
+  auto-fill on selection (previously broken — the wiring JS never existed),
+  live totals, product image preview
+- Product images: manual upload on Add/Edit Product with thumbnailing
+- Sales Order numbering: MANUAL-XXXXMMYY format, independent per-month
+  counters (verified correct even with out-of-order entry), row-locked
+  against concurrent creation
+- Invoice numbers now exactly match their Sales Order number with an
+  INV- prefix
+- Payment and expense proof (receipt) uploads are mandatory on new
+  postings, stored on the private disk (never a public URL), viewable via
+  permission-gated "View proof" links; historical records without proof
+  remain valid
+- Paid/Remaining/Payment-status now shown on the orders list, order detail,
+  and a new customer profile Order History table — always computed live
+  from invoices, never a separately stored balance
+- Bulk product import now supports CSV (sku/name/category/description/
+  cost_price/selling_price/vat_rate/stock_quantity/unit/image_filename/
+  active) matched by SKU, alongside the existing JSON/ZIP importer for the
+  WhatsApp order-form export format; downloadable CSV/JSON templates
+- Product list shows image thumbnails; order detail item table shows
+  product thumbnail + SKU
+
+Real bugs found and fixed while inspecting the actual repository (not
+invented — each confirmed by reproducing it, not assumed):
+- The order form's price-autofill JS file never existed at all — root cause
+  of the "registered product price is not appearing" report
+- resources/js/app.js, resources/css/app.css, and 5 other feature-specific
+  assets only existed in the compiled output, never in resources/ source —
+  the next asset rebuild would have silently deleted them; fixed by giving
+  every one of them a real source location and wiring the build to copy
+  from there
+- Vite's default build would hash-rename app.css/app.js (breaking the
+  hardcoded paths the layouts reference) and delete sibling static assets
+  on every rebuild — fixed in vite.config.js
+
+61 files changed or added this release (see update-manifest.txt).
+55 automated tests passing at build time, 205 assertions — see TEST-RESULTS.md.

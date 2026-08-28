@@ -1,0 +1,7 @@
+@extends('layouts.app')
+@section('title','Customers')
+@section('subtitle','Customer records, balances and WhatsApp contacts')
+@section('content')
+<div class="toolbar"><form><input name="q" value="{{ request('q') }}" placeholder="Search name, phone or code"><button class="btn">Search</button></form>@if(auth()->user()->hasPermission('customers.manage'))<a class="btn primary" href="{{ route('customers.create') }}">Add customer</a>@endif</div>
+<div class="table-wrap mobile-cards"><table><thead><tr><th>Code</th><th>Customer</th><th>Phone / WhatsApp</th><th>Location</th><th>Terms</th><th>Status</th></tr></thead><tbody>@forelse($customers as $c)<tr><td data-label="Code"><a href="{{ route('customers.show',$c) }}"><b>{{ $c->customer_code }}</b></a></td><td data-label="Customer"><b>{{ $c->name }}</b><div class="muted">{{ $c->company_name?:$c->email }}</div></td><td data-label="Phone">{{ $c->phone }} @if($c->whatsapp_url)<a class="btn small success" target="_blank" rel="noopener" href="{{ $c->whatsapp_url }}">WhatsApp</a>@endif</td><td data-label="Location">{{ collect([$c->area,$c->emirate])->filter()->join(', ')?:'—' }}</td><td data-label="Terms">{{ $c->payment_terms_days }} days</td><td data-label="Status"><span class="badge {{ $c->status==='active'?'green':'red' }}">{{ $c->status }}</span></td></tr>@empty<tr><td colspan="6" class="empty">No customers found.</td></tr>@endforelse</tbody></table></div>{{ $customers->links() }}
+@endsection
