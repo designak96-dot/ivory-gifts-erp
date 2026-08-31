@@ -167,6 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (taxInput) taxInput.value = parseFloat(data.resultTax || 0).toFixed(2);
         if (thumbEl) { thumbEl.src = data.resultThumb || ''; thumbEl.style.display = data.resultThumb ? '' : 'none'; }
         recalcAll();
+        syncDeliveryLine();
       },
     });
   }
@@ -181,6 +182,44 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   itemsTable?.querySelectorAll('tbody tr[data-product-row]').forEach(wireRemove);
 
+  // Delivery / Pickup: whenever fulfillment is "Delivery", the order must
+  // carry exactly one "Delivery" line (price left for the user to set,
+  // tax-free per the explicit requirement), and that line must always end
+  // up as the LAST row — however many products get added afterward.
+  // Declared as real function declarations (hoisted), not const arrow
+  // functions, so they're callable from wireProductRow's onSelect further
+  // up in this file regardless of textual order.
+  const fulfillmentSelect = document.querySelector('[data-fulfillment-type]');
+
+  function moveDeliveryLineToEnd() {
+    const existing = itemsTable?.querySelector('tbody tr[data-auto-delivery-line]');
+    if (existing) itemsTable.querySelector('tbody').appendChild(existing);
+  }
+
+  function syncDeliveryLine() {
+    if (!fulfillmentSelect || !itemsTable || !manualRowTemplate) return;
+    const existing = itemsTable.querySelector('tbody tr[data-auto-delivery-line]');
+    if (fulfillmentSelect.value === 'delivery') {
+      if (existing) { moveDeliveryLineToEnd(); return; }
+      const html = manualRowTemplate.innerHTML.replaceAll('__INDEX__', rowIndex++);
+      const tmp = document.createElement('tbody');
+      tmp.innerHTML = html;
+      const newRow = tmp.firstElementChild;
+      newRow.setAttribute('data-auto-delivery-line', '1');
+      const descInput = newRow.querySelector('input[name*="[description]"]');
+      if (descInput) descInput.value = 'Delivery';
+      const taxInput = newRow.querySelector('[data-tax]');
+      if (taxInput) taxInput.value = '0';
+      itemsTable.querySelector('tbody').appendChild(newRow);
+      wireProductRow(newRow);
+      wireRemove(newRow);
+      recalcAll();
+    } else if (existing) {
+      existing.remove();
+      recalcAll();
+    }
+  }
+
   document.querySelector('[data-add-row]')?.addEventListener('click', () => {
     if (!rowTemplate) return;
     const html = rowTemplate.innerHTML.replaceAll('__INDEX__', rowIndex++);
@@ -190,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
     itemsTable.querySelector('tbody').appendChild(newRow);
     wireProductRow(newRow);
     wireRemove(newRow);
+    moveDeliveryLineToEnd();
   });
 
   document.querySelector('[data-add-manual-row]')?.addEventListener('click', () => {
@@ -201,7 +241,19 @@ document.addEventListener('DOMContentLoaded', () => {
     itemsTable.querySelector('tbody').appendChild(newRow);
     wireProductRow(newRow);
     wireRemove(newRow);
+    moveDeliveryLineToEnd();
   });
+
+  if (fulfillmentSelect) {
+    fulfillmentSelect.addEventListener('change', syncDeliveryLine);
+    // "Delivery" is the default value on a brand-new order form, so it's
+    // already selected without the user ever triggering a change event —
+    // meaning the line would otherwise never appear until they manually
+    // switched away and back. Only do this for a genuinely NEW order
+    // (never for editing an existing one, where a surprise new line
+    // appearing on page load would be unexpected and wrong).
+    if (form?.dataset.isNewOrder === '1') syncDeliveryLine();
+  }
 
   // ---------- customer combo ----------
   const customerVisible = document.querySelector('[data-customer-combo-input]');
@@ -341,4 +393,43 @@ document.addEventListener('DOMContentLoaded', () => {
     const dialog = document.getElementById('quick-product');
     if (dialog) dialog.dataset.targetRow = String(rows.indexOf(row));
   });
+});
+
+// Order Capacity Limits — proactively checks how many deliveries are
+// already booked for the chosen delivery date and warns before
+// submission if it's full, offering the next available date as a
+// one-click fix, rather than only failing reactively later when a
+// delivery note gets scheduled.
+document.addEventListener('DOMContentLoaded', () => {
+  const dateInput = document.querySelector('[data-capacity-check]');
+  const messageEl = document.querySelector('[data-capacity-message]');
+  if (!dateInput || !messageEl) return;
+
+  let debounce;
+  const check = async () => {
+    const date = dateInput.value;
+    if (!date) { messageEl.textContent = ''; return; }
+    try {
+      const res = await fetch(`/orders/check-capacity?date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.full) {
+        messageEl.innerHTML = `⚠ Fully booked (${data.count}/${data.limit}). <a href="#" data-use-suggested="${data.suggested_date}">Use ${data.suggested_date} instead</a>`;
+        messageEl.className = 'kpi-bad';
+      } else {
+        messageEl.textContent = `${data.count}/${data.limit} booked for this date.`;
+        messageEl.className = 'muted';
+      }
+    } catch (e) { /* non-fatal — capacity display is advisory, not a hard block */ }
+  };
+
+  dateInput.addEventListener('change', () => { clearTimeout(debounce); debounce = setTimeout(check, 150); });
+  messageEl.addEventListener('click', (e) => {
+    const link = e.target.closest('[data-use-suggested]');
+    if (!link) return;
+    e.preventDefault();
+    dateInput.value = link.dataset.useSuggested;
+    check();
+  });
+  if (dateInput.value) check();
 });

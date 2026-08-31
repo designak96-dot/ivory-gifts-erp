@@ -56,6 +56,21 @@ class QuotationController extends Controller
     }
 
     public function show(Quotation $quotation){$quotation->load('customer','items.product','versions');return view('quotations.show',compact('quotation'));}
+
+    /** Read-only view of a specific historical snapshot — never edits the live quotation. */
+    public function showVersion(Quotation $quotation, int $version)
+    {
+        $record = $quotation->versions()->where('version_number', $version)->firstOrFail();
+        $latestVersion = $quotation->versions()->max('version_number');
+        return view('quotations.version', [
+            'quotation' => $quotation,
+            'snapshot' => $record->snapshot,
+            'versionNumber' => $version,
+            'isLatest' => $version === $latestVersion,
+            'createdBy' => \App\Models\User::find($record->created_by),
+            'createdAt' => $record->created_at,
+        ]);
+    }
     public function status(Request $r,Quotation $quotation){$d=$r->validate(['status'=>'required|in:draft,sent,viewed,approved,rejected,expired']);$quotation->update($d);return back()->with('success','Quotation status updated.');}
 
     /**

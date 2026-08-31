@@ -1,44 +1,78 @@
-# Ivory Gifts ERP — Incremental Update 2026-08-28-v22
+# Ivory Gifts ERP — Expense Attachments + Cash Reconciliation — 2026-08-31-v46
 
-## Full visual redesign — appearance only, zero content/functionality changes
+## 1. Expense Attachments
+Two genuinely separate upload fields in Finance → Expenses:
+- **Expense Invoice / Bill** — optional
+- **Payment Proof / Slip** — required (unchanged from before — this was
+  already required)
 
-Complete new look system-wide: cool indigo/lavender palette replacing the
-old warm brown/ivory theme, fully rounded "pill" treatment on buttons,
-badges, and the active sidebar item, larger card radius (20px), softer
-cool-toned shadows, and stronger heading weight for more visual presence
-— across every page, since they all share one stylesheet.
+Both accept JPG/JPEG/PNG/WEBP/PDF, support drag-and-drop and click to
+browse, and are stored at completely independent paths — uploading one
+never touches or overwrites the other. Each is viewable and downloadable
+separately from the expense register. Historical expenses (posted before
+this update) are completely unaffected — their existing proof data is
+untouched, and they simply show "Not provided" for the new invoice
+field they never had.
 
-**How this was done safely**: every single selector, and every
-non-visual CSS property (`display`, `position`, `overflow`, `z-index`,
-`white-space`, grid/flex structure) was left completely untouched —
-verified with a direct diff that strips out only color values and
-confirms the rest is byte-for-byte identical to before. Zero JavaScript
-was touched at all. This matters because a large amount of this session
-went into finding and fixing real functional bugs in this exact CSS
-(dropdown clipping, print pagination, mobile table behavior) — a careless
-re-skin could easily have silently reintroduced any of them.
+**A real pre-existing bug was found and fixed along the way**: the route
+for viewing an expense's proof required `expenses.manage`, but the
+controller itself was written to also allow `expenses.view` — silently
+blocking view-only staff who should have had access. Fixed at the route
+level, with a regression test guarding it.
 
-## What changed
-- `resources/css/app.css` — the main design token system (`:root`
-  variables) and every component style that references them.
-- `dashboard.css`, `delivery.css`, `order-entry.css`, `sync.css` — the
-  hardcoded warm-toned colors in these four files (dashboard charts,
-  delivery status badges, quick-add dialogs, the sync banner) recolored
-  to match, so nothing looks like it belongs to a different theme.
-- One inline style in the shared layout (the proof-viewer popup's
-  placeholder background).
+## 2. Cash Reconciliation
+New page: **Finance → Cash Reconciliation**.
+
+Automatically computes **Opening Cash + Cash In − Cash Out = Expected
+Cash Balance** directly from the real double-entry ledger — the same
+source of truth every other financial figure in this app already comes
+from, not a separate, parallel calculation that could drift out of
+sync. This covers cash customer payments and cash expenses (already
+posted to the ledger by existing features) plus supplier cash payments,
+cash refunds, petty cash, and approved adjustments, all recorded through
+one new Adjustment form.
+
+At reconciliation time, enter the Reconciliation Date, Cash Account, and
+Actual Physical Cash Count. The system shows Expected Cash, Physical
+Cash, and the Difference — with **"Cash difference requires review."**
+displayed whenever they don't match. The reconciliation never
+automatically changes any existing transaction — it only ever records a
+new snapshot.
+
+Owner/Admin can record an adjustment (Amount, Cash In/Out, Reason, Date,
+optional proof), each one auto-numbered **CR-xxxxx** (Cash Receipt) or
+**CP-xxxxx** (Cash Payment) and posted to the ledger through a dedicated
+clearing account, so it genuinely affects future reconciliations rather
+than just being a note. Full audit trail via creator and timestamps on
+every record.
+
+**A real bug was caught and fixed during development**: an early version
+of the calculation filtered ledger lines by `status='posted'`, which
+would have excluded a reversed transaction's original lines while still
+counting its reversal — leaving a phantom balance that shouldn't exist.
+Caught by a dedicated test before it shipped; the existing, proven
+pattern from `FinancialSummaryService` (no status filter — both sides of
+a reversal naturally cancel) was used instead.
 
 ## Testing
-**154/154 automated tests still passing** — including every dropdown-
-clipping, print-pagination, form-preservation, and duplicate-detection
-test built up over this entire project. This is the real proof nothing
-functional broke: none of those tests care about color, but every one of
-them would have failed if a selector, property, or piece of markup had
-been altered instead of just recolored.
+**484/484 automated tests passing**, including 12 new tests specifically
+covering the reconciliation math (opening balance across month
+boundaries, the reversal-cancellation guard), CR-/CP- reference
+generation, adjustment-to-reconciliation integration (verified an
+adjustment genuinely moves the next computed expected balance, not just
+gets recorded), and permission boundaries. Verified end-to-end with a
+real rendered page showing correct live numbers (Opening 2,000 + Cash In
+800 − Cash Out 350 = Expected 2,450, correctly flagged against a 2,400
+physical count as a real difference). Fresh-install migration confirmed
+clean.
 
 ## Install
 ```bash
 cd /home/ivorygif/ivory-accounts
-unzip -o /path/to/ivory-gifts-erp-update-20260828-v22.zip -d .
+unzip -o /path/to/ivory-gifts-erp-update-20260831-v46.zip -d .
 PHP_BIN=/opt/alt/php85/usr/bin/php bash update.sh
 ```
+
+Does not reset the database, run migrate:fresh, touch .env, or
+regenerate APP_KEY. All new database changes are additive; existing
+expense, payment, and accounting records are completely untouched.

@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 class InvoiceController extends Controller
 {
-    public function index(){ $q=Invoice::with('customer');if($s=request('q'))$q->where(fn($x)=>$x->where('invoice_number','like',"%$s%")->orWhereHas('customer',fn($c)=>$c->where('name','like',"%$s%")));if(request('status'))$q->where('status',request('status'));return view('invoices.index',['invoices'=>$q->latest()->paginate(25)]);}
+    public function index(){ $q=Invoice::with('customer');if($s=request('q'))$q->where(fn($x)=>$x->where('invoice_number','like',"%$s%")->orWhereHas('customer',fn($c)=>$c->where('name','like',"%$s%")));if(request('status'))$q->where('status',request('status'));if(request('min_outstanding'))$q->where('outstanding_amount','>=',(float)request('min_outstanding'));return view('invoices.index',['invoices'=>$q->latest()->paginate(25)]);}
 
     /**
      * A real, browsable place to find a payment and view its proof — the

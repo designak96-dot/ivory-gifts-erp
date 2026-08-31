@@ -23,6 +23,10 @@ class DashboardController extends Controller
         $end = $start->copy()->endOfMonth();
         $orders = SalesOrder::where('is_legacy_delivery_import', false)->whereBetween('order_date', [$start, $end]);
 
+        $periodProfit = app(\App\Services\ProfitCalculatorService::class)->periodGrossProfit($start, $end);
+        $financialSummary = app(\App\Services\FinancialSummaryService::class)->summary();
+        $ivoryAi = app(\App\Services\IvoryAiInsightsService::class)->build();
+
         $stats = [
             'orders' => (clone $orders)->count(),
             'sales' => (clone $orders)->sum('grand_total'),
@@ -31,6 +35,10 @@ class DashboardController extends Controller
             'due_today' => DeliveryNote::whereDate('delivery_date', today())->where('status', '!=', 'delivered')->count(),
             'production' => ProductionJob::whereNotIn('stage', ['completed', 'cancelled'])->count(),
             'expenses' => Expense::whereBetween('expense_date', [$start, $end])->sum('total_amount'),
+            'gross_profit' => $periodProfit['gross_profit'],
+            'margin_percent' => $periodProfit['margin_percent'],
+            'receivables' => $financialSummary['receivables'],
+            'low_stock' => $ivoryAi['low_stock'],
         ];
 
         $recentOrders = SalesOrder::with('customer')->where('is_legacy_delivery_import', false)->latest()->limit(8)->get();
@@ -77,6 +85,13 @@ class DashboardController extends Controller
             'top_products' => $topProducts,
         ];
 
-        return view('dashboard', compact('stats', 'recentOrders', 'deliveries', 'month', 'chartData'));
+        // Dynamic greeting: real authenticated user, UAE local time decides
+        // morning/afternoon/evening — not a hardcoded label.
+        $hour = (int) now('Asia/Dubai')->format('G');
+        $period = $hour < 12 ? 'morning' : ($hour < 17 ? 'afternoon' : 'evening');
+        $firstName = trim(explode(' ', auth()->user()->name)[0] ?? auth()->user()->name);
+        $greeting = "Good {$period}, {$firstName}";
+
+        return view('dashboard', compact('stats', 'recentOrders', 'deliveries', 'month', 'chartData', 'greeting', 'ivoryAi'));
     }
 }

@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\{AccountingController,AuditController,AuthController,BackupController,CustomerController,DashboardController,DataImportController,DeliveryController,ExpenseController,ImportExportController,InventoryController,InvoiceController,LegacyDeliveryImportController,ProductController,ProductImportController,ProductionController,ProofController,PurchaseOrderController,QuotationController,RecoverySnapshotController,ReportController,SalesOrderController,SettingsController,SetupController,SupplierController,SyncVersionController,SystemHealthController,UserController};
+use App\Http\Controllers\{AccountingController,AuditController,AuthController,BackupController,CalendarController,CashflowController,CashReconciliationController,CreditNoteController,CustomerController,DashboardController,DataImportController,DeliveryController,ExpenseBudgetController,ExpenseController,ExportController,FinancialAccountController,GlobalSearchController,ImportExportController,InventoryController,InvoiceController,IvoryAiController,LegacyDeliveryImportController,OrderAttachmentController,OrderCommentController,ProductController,ProductImportController,ProductionController,ProofController,PublicShareController,PurchaseOrderController,QuotationController,RecoverySnapshotController,ReportController,SalesOrderController,SavedFilterController,SettingsController,SetupController,ShareLinkController,SupplierController,SyncVersionController,SystemHealthController,TaskController,UserController,VatReportController,WhatsAppShareController};
 use Illuminate\Support\Facades\Route;
 
 Route::get('/setup', [SetupController::class,'create'])->name('setup.create');
@@ -13,18 +13,73 @@ Route::middleware('installed')->group(function(){
     Route::middleware(['auth','active'])->group(function(){
         Route::get('/',DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
         Route::resource('customers',CustomerController::class)->except('destroy')->middleware('permission:customers.view');
+        Route::post('/customers/{customer}/tags',[CustomerController::class,'syncTags'])->middleware('permission:customers.manage')->name('customers.tags');
         Route::resource('products',ProductController::class)->except(['show','destroy'])->middleware('permission:products.view');
         Route::resource('suppliers',SupplierController::class)->except(['show','destroy'])->middleware('permission:purchases.view');
         Route::resource('quotations',QuotationController::class)->only(['index','create','store','show','edit','update'])->middleware('permission:quotations.view');
+        Route::get('/quotations/{quotation}/versions/{version}',[QuotationController::class,'showVersion'])->middleware('permission:quotations.view')->name('quotations.version');
         Route::post('/quotations/{quotation}/convert',[QuotationController::class,'convert'])->middleware('permission:orders.manage')->name('quotations.convert');
         Route::patch('/quotations/{quotation}/status',[QuotationController::class,'status'])->middleware('permission:quotations.manage')->name('quotations.status');
         Route::post('/orders/quick-customer',[SalesOrderController::class,'quickCustomer'])->middleware('permission:orders.manage')->name('orders.quick-customer');
         Route::post('/orders/quick-product',[SalesOrderController::class,'quickProduct'])->middleware('permission:orders.manage')->name('orders.quick-product');
         Route::get('/orders/search-customers',[SalesOrderController::class,'searchCustomers'])->name('orders.search-customers');
         Route::get('/orders/search-products',[SalesOrderController::class,'searchProducts'])->name('orders.search-products');
+        Route::get('/orders/check-capacity',[SalesOrderController::class,'checkCapacity'])->name('orders.check-capacity');
+        Route::get('/calendar',[CalendarController::class,'index'])->middleware('permission:dashboard.view')->name('calendar.index');
+        Route::get('/finance/accounts',[FinancialAccountController::class,'index'])->middleware('permission:accounting.view')->name('finance.accounts');
+        Route::post('/finance/accounts',[FinancialAccountController::class,'store'])->middleware('permission:accounting.manage')->name('finance.accounts.store');
+        Route::get('/finance/cashflow',[CashflowController::class,'index'])->middleware('permission:accounting.view')->name('cashflow.index');
+        Route::get('/finance/budgets',[ExpenseBudgetController::class,'index'])->middleware('permission:expenses.view')->name('finance.budgets');
+        Route::post('/finance/budgets',[ExpenseBudgetController::class,'store'])->middleware('permission:expenses.manage')->name('finance.budgets.store');
+        Route::get('/finance/cash-reconciliation',[CashReconciliationController::class,'index'])->middleware('permission:accounting.view')->name('finance.cash-reconciliation');
+        Route::post('/finance/cash-reconciliation',[CashReconciliationController::class,'store'])->middleware('permission:accounting.manage')->name('finance.cash-reconciliation.store');
+        Route::post('/finance/cash-reconciliation/adjustment',[CashReconciliationController::class,'storeAdjustment'])->middleware('permission:accounting.manage')->name('finance.cash-reconciliation.adjustment');
+        Route::get('/finance/vat',[VatReportController::class,'index'])->middleware('permission:reports.financial')->name('vat.index');
+        Route::get('/finance/vat/export',[VatReportController::class,'exportCsv'])->middleware('permission:reports.financial')->name('vat.export');
+        Route::get('/credit-notes',[CreditNoteController::class,'index'])->middleware('permission:invoices.view')->name('credit-notes.index');
+        Route::get('/credit-notes/create',[CreditNoteController::class,'create'])->middleware('permission:invoices.manage')->name('credit-notes.create');
+        Route::post('/credit-notes',[CreditNoteController::class,'store'])->middleware('permission:invoices.manage')->name('credit-notes.store');
+        Route::get('/credit-notes/{creditNote}',[CreditNoteController::class,'show'])->middleware('permission:invoices.view')->name('credit-notes.show');
+        Route::get('/ivory-ai',[IvoryAiController::class,'index'])->middleware('permission:dashboard.view')->name('ivory-ai.index');
+        Route::get('/ivory-ai/quick-action',[IvoryAiController::class,'quickAction'])->middleware('permission:dashboard.view')->name('ivory-ai.quick-action');
+        Route::get('/exports',[ExportController::class,'index'])->middleware('permission:exports.view')->name('exports.index');
+        Route::get('/exports/orders',[ExportController::class,'orders'])->middleware('permission:exports.view')->name('exports.orders');
+        Route::get('/exports/invoices',[ExportController::class,'invoices'])->middleware('permission:exports.view')->name('exports.invoices');
+        Route::get('/exports/payments',[ExportController::class,'payments'])->middleware('permission:exports.view')->name('exports.payments');
+        Route::get('/exports/customers',[ExportController::class,'customers'])->middleware('permission:exports.view')->name('exports.customers');
+        Route::get('/exports/products',[ExportController::class,'products'])->middleware('permission:exports.view')->name('exports.products');
+        Route::get('/exports/expenses',[ExportController::class,'expenses'])->middleware('permission:exports.view')->name('exports.expenses');
+        Route::get('/exports/purchases',[ExportController::class,'purchases'])->middleware('permission:exports.view')->name('exports.purchases');
+        Route::get('/exports/profit',[ExportController::class,'profit'])->middleware('permission:reports.financial')->name('exports.profit');
+        Route::get('/exports/outstanding',[ExportController::class,'outstanding'])->middleware('permission:reports.financial')->name('exports.outstanding');
+        Route::get('/exports/top-customers',[ExportController::class,'topCustomers'])->middleware('permission:reports.view')->name('exports.top-customers');
+        Route::get('/exports/top-products',[ExportController::class,'topProducts'])->middleware('permission:reports.view')->name('exports.top-products');
+        Route::post('/saved-filters',[SavedFilterController::class,'store'])->middleware('permission:dashboard.view')->name('saved-filters.store');
+        Route::delete('/saved-filters/{savedFilter}',[SavedFilterController::class,'destroy'])->middleware('permission:dashboard.view')->name('saved-filters.destroy');
+        Route::get('/tasks',[TaskController::class,'index'])->middleware('permission:dashboard.view')->name('tasks.index');
+        Route::post('/tasks',[TaskController::class,'store'])->middleware('permission:dashboard.view')->name('tasks.store');
+        Route::patch('/tasks/{task}',[TaskController::class,'update'])->middleware('permission:dashboard.view')->name('tasks.update');
+        Route::delete('/tasks/{task}',[TaskController::class,'destroy'])->middleware('permission:dashboard.view')->name('tasks.destroy');
+        Route::get('/search',[GlobalSearchController::class,'search'])->name('search.global');
         Route::resource('orders',SalesOrderController::class)->only(['index','create','store','show','edit','update'])->middleware('permission:orders.view');
+        Route::get('/orders/{order}/repeat',[SalesOrderController::class,'repeat'])->middleware('permission:orders.manage')->name('orders.repeat');
+        Route::post('/orders/{order}/comments',[OrderCommentController::class,'store'])->middleware('permission:orders.view')->name('orders.comments.store');
+        Route::patch('/order-comments/{comment}',[OrderCommentController::class,'update'])->middleware('permission:orders.view')->name('order-comments.update');
+        Route::delete('/order-comments/{comment}',[OrderCommentController::class,'destroy'])->middleware('permission:orders.view')->name('order-comments.destroy');
+        Route::post('/orders/{order}/attachments',[OrderAttachmentController::class,'store'])->middleware('permission:orders.manage')->name('orders.attachments.store');
+        Route::post('/orders/{order}/proof',[OrderAttachmentController::class,'storeProof'])->middleware('permission:orders.manage')->name('orders.proof.store');
+        Route::post('/orders/{order}/share-link',[ShareLinkController::class,'store'])->middleware('permission:orders.manage')->name('share-links.store');
+        Route::post('/orders/{order}/share-link/regenerate',[ShareLinkController::class,'regenerate'])->middleware('permission:orders.manage')->name('share-links.regenerate');
+        Route::post('/share-links/{shareLink}/toggle',[ShareLinkController::class,'toggle'])->middleware('permission:orders.manage')->name('share-links.toggle');
+        Route::post('/share-links/{shareLink}/expiry',[ShareLinkController::class,'setExpiry'])->middleware('permission:orders.manage')->name('share-links.expiry');
+        Route::get('/share-links',[ShareLinkController::class,'index'])->middleware('permission:orders.view')->name('share-links.index');
+        Route::get('/orders/{order}/whatsapp/check',[WhatsAppShareController::class,'check'])->middleware('permission:orders.view')->name('whatsapp.check');
+        Route::post('/orders/{order}/whatsapp/link',[WhatsAppShareController::class,'link'])->middleware('permission:orders.manage')->name('whatsapp.link');
+        Route::get('/order-attachments/{attachment}',[OrderAttachmentController::class,'download'])->middleware('permission:orders.view')->name('order-attachments.download');
+        Route::delete('/order-attachments/{attachment}',[OrderAttachmentController::class,'destroy'])->middleware('permission:orders.view')->name('order-attachments.destroy');
         Route::delete('/orders/{order}',[SalesOrderController::class,'destroy'])->middleware('permission:orders.delete')->name('orders.destroy');
         Route::patch('/orders/{order}/status',[SalesOrderController::class,'updateStatus'])->middleware('permission:orders.manage')->name('orders.status');
+        Route::patch('/orders/{order}/simple-status',[SalesOrderController::class,'updateSimpleStatus'])->middleware('permission:orders.manage')->name('orders.simple-status');
         Route::post('/orders/{order}/invoice',[SalesOrderController::class,'invoice'])->middleware('permission:invoices.manage')->name('orders.invoice');
         Route::post('/orders/{order}/delivery',[SalesOrderController::class,'delivery'])->middleware('permission:deliveries.manage')->name('orders.delivery');
         Route::get('/invoices',[InvoiceController::class,'index'])->middleware('permission:invoices.view')->name('invoices.index');
@@ -42,13 +97,18 @@ Route::middleware('installed')->group(function(){
         Route::get('/delivery-report',[DeliveryController::class,'report'])->middleware('permission:deliveries.view')->name('deliveries.report');
         Route::get('/deliveries/{delivery}',[DeliveryController::class,'show'])->middleware('permission:deliveries.view')->name('deliveries.show');
         Route::patch('/deliveries/{delivery}',[DeliveryController::class,'update'])->middleware('permission:deliveries.manage')->name('deliveries.update');
+        Route::patch('/deliveries/{delivery}/order-workflow',[DeliveryController::class,'updateOrderWorkflow'])->middleware('permission:deliveries.manage')->name('deliveries.order-workflow');
         Route::patch('/deliveries/{delivery}/quick-update',[DeliveryController::class,'quickUpdate'])->middleware('permission:deliveries.manage')->name('deliveries.quick-update');
         Route::get('/purchases',[PurchaseOrderController::class,'index'])->middleware('permission:purchases.view')->name('purchases.index');
+        Route::get('/purchases/{purchaseOrder}',[PurchaseOrderController::class,'show'])->middleware('permission:purchases.view')->name('purchases.show');
         Route::post('/purchases',[PurchaseOrderController::class,'store'])->middleware('permission:purchases.manage')->name('purchases.store');
+        Route::post('/purchases/{purchaseOrder}/approve',[PurchaseOrderController::class,'approve'])->middleware('permission:purchases.manage')->name('purchases.approve');
+        Route::post('/purchases/{purchaseOrder}/mark-ordered',[PurchaseOrderController::class,'markOrdered'])->middleware('permission:purchases.manage')->name('purchases.mark-ordered');
         Route::post('/purchases/{purchaseOrder}/receive',[PurchaseOrderController::class,'receive'])->middleware('permission:inventory.manage')->name('purchases.receive');
         Route::get('/expenses',[ExpenseController::class,'index'])->middleware('permission:expenses.view')->name('expenses.index');
         Route::post('/expenses',[ExpenseController::class,'store'])->middleware('permission:expenses.manage')->name('expenses.store');
-        Route::get('/expenses/{expense}/proof',[ProofController::class,'expense'])->middleware('permission:expenses.manage')->name('expenses.proof');
+        Route::get('/expenses/{expense}/proof',[ProofController::class,'expense'])->middleware('permission:expenses.view')->name('expenses.proof');
+        Route::get('/expenses/{expense}/invoice',[ProofController::class,'expenseInvoice'])->middleware('permission:expenses.view')->name('expenses.invoice');
         Route::get('/inventory',[InventoryController::class,'index'])->middleware('permission:inventory.view')->name('inventory.index');
         Route::post('/inventory/adjust',[InventoryController::class,'adjust'])->middleware('permission:inventory.manage')->name('inventory.adjust');
         Route::get('/accounting',[AccountingController::class,'index'])->middleware('permission:accounting.view')->name('accounting.index');
@@ -58,6 +118,7 @@ Route::middleware('installed')->group(function(){
         Route::get('/users',[UserController::class,'index'])->middleware('permission:users.manage')->name('users.index');
         Route::post('/users',[UserController::class,'store'])->middleware('permission:users.manage')->name('users.store');
         Route::patch('/users/{user}',[UserController::class,'update'])->middleware('permission:users.manage')->name('users.update');
+        Route::delete('/users/{user}',[UserController::class,'destroy'])->middleware('permission:users.manage')->name('users.destroy');
         Route::get('/settings',[SettingsController::class,'index'])->middleware('permission:settings.manage')->name('settings.index');
         Route::patch('/settings',[SettingsController::class,'update'])->middleware('permission:settings.manage')->name('settings.update');
         Route::post('/settings/tax',[SettingsController::class,'tax'])->middleware('permission:settings.manage')->name('settings.tax');
@@ -89,4 +150,13 @@ Route::middleware('installed')->group(function(){
         Route::post('/system/backups',[BackupController::class,'store'])->middleware('permission:backups.manage')->name('backups.store');
         Route::get('/system/backups/{backup}/download',[BackupController::class,'download'])->middleware('permission:backups.manage')->name('backups.download');
     });
+});
+
+// Public, unauthenticated customer share routes — rate-limited to
+// prevent token-guessing/enumeration abuse. Resolve access purely from
+// the token in the URL; no session, no login required.
+Route::middleware('throttle:30,1')->group(function () {
+    Route::get('/share/{token}',[PublicShareController::class,'show'])->name('share.show');
+    Route::get('/share/{token}/invoice',[PublicShareController::class,'viewInvoice'])->name('share.invoice');
+    Route::get('/share/{token}/proof',[PublicShareController::class,'downloadProof'])->name('share.proof');
 });

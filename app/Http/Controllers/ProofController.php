@@ -29,9 +29,19 @@ class ProofController extends Controller
         return $this->stream($expense->proof_path, $expense->proof_original_name, $expense->proof_mime);
     }
 
+    public function expenseInvoice(Expense $expense)
+    {
+        abort_unless(auth()->user()->hasPermission('expenses.manage') || auth()->user()->hasPermission('expenses.view'), 403);
+        abort_unless($expense->invoice_path, 404, 'This expense has no invoice/bill on file.');
+        return $this->stream($expense->invoice_path, $expense->invoice_original_name, $expense->invoice_mime);
+    }
+
     private function stream(string $path, ?string $originalName, ?string $mime)
     {
         abort_unless(Storage::disk('local')->exists($path), 404);
+        if (request()->boolean('download')) {
+            return Storage::disk('local')->download($path, $originalName);
+        }
         return Storage::disk('local')->response($path, $originalName, [
             'Content-Type' => $mime ?? 'application/octet-stream',
         ]);

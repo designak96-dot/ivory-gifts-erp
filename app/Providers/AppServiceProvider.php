@@ -51,5 +51,22 @@ class AppServiceProvider extends ServiceProvider
                 $view->with('companyLogoUrl', null);
             }
         });
+
+        // Footer financial bar (Bank/Cash/Inventory/Payables/Receivables)
+        // — scoped to just the authenticated layout, which renders once
+        // per page load, rather than the '*' composer above which would
+        // run these real ledger queries on every single view render.
+        View::composer('layouts.app', function ($view) {
+            try {
+                $view->with('financialSummary', app(\App\Services\FinancialSummaryService::class)->summary());
+            } catch (\Throwable) {
+                $view->with('financialSummary', null);
+            }
+            try {
+                $view->with('notifications', app(\App\Services\NotificationService::class)->all());
+            } catch (\Throwable) {
+                $view->with('notifications', []);
+            }
+        });
     }
 }

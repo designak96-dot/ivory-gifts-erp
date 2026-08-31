@@ -61,6 +61,33 @@ class DeliveryController extends Controller
         ]);
     }
 
+    /**
+     * The new simplified Confirmation/Design/Status fields — read and
+     * written on the LINKED Sales Order via SimpleWorkflowService, so
+     * Deliveries and Sales can never show different values for the same
+     * order. Kept entirely separate from update() above, which still
+     * drives the delivery's own physical logistics (POD photo, driver
+     * assignment, capacity scheduling) — that workflow is unchanged.
+     */
+    public function updateOrderWorkflow(Request $request, DeliveryNote $delivery, \App\Services\SimpleWorkflowService $workflow)
+    {
+        $data = $request->validate([
+            'field' => 'required|in:status,confirmation,design',
+            'value' => 'required|string',
+        ]);
+        $order = $delivery->salesOrder;
+        match ($data['field']) {
+            'status' => $workflow->setStatus($order, $data['value']),
+            'confirmation' => $workflow->setConfirmation($order, $data['value']),
+            'design' => $workflow->setDesign($order, $data['value']),
+        };
+        $order->refresh();
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json(['status' => $order->simple_status, 'confirmation' => $order->simple_confirmation, 'design' => $order->simple_design]);
+        }
+        return back()->with('success', 'Order status updated.');
+    }
+
     public function update(Request $request, DeliveryNote $delivery, DeliverySchedulingService $scheduler)
     {
         $data = $request->validate([
@@ -104,6 +131,7 @@ class DeliveryController extends Controller
         if ($request->hasFile('pod_photo')) {
             $data['pod_photo_path'] = $request->file('pod_photo')->store('pod', 'public');
         }
+        $proofJustUploaded = $request->hasFile('pod_photo');
         if ($request->hasFile('signature')) {
             $data['signature_path'] = $request->file('signature')->store('signatures', 'public');
         }
@@ -116,7 +144,7 @@ class DeliveryController extends Controller
             return back()->withErrors(['failure_reason' => 'Please record why the delivery failed.'])->withInput();
         }
 
-        DB::transaction(function () use ($delivery, $data) {
+        DB::transaction(function () use ($delivery, $data, $proofJustUploaded) {
             $oldStatus = $delivery->status;
             $data['last_updated_by'] = auth()->id();
             $data['delivered_at'] = $data['status'] === 'delivered' ? ($delivery->delivered_at ?: now()) : null;
@@ -124,6 +152,9 @@ class DeliveryController extends Controller
                 $data['attempt_count'] = $delivery->attempt_count + 1;
             }
             $delivery->update($data);
+            if ($proofJustUploaded) {
+                SalesOrderStatusHistory::create(['sales_order_id' => $delivery->sales_order_id, 'field' => 'proof', 'old_value' => null, 'new_value' => 'Proof-of-delivery photo uploaded', 'changed_by' => auth()->id()]);
+            }
 
             $orderStatus = match ($delivery->status) {
                 'out_for_delivery' => 'out_for_delivery',
@@ -222,8 +253,18 @@ class DeliveryController extends Controller
         $stats = [
             'month_total' => (clone $statsQuery)->whereBetween('delivery_date', [$month, $month->copy()->endOfMonth()])->count(),
             'overdue' => (clone $statsQuery)->whereDate('delivery_date', '<', $today)->whereIn('status', self::ACTIVE_STATUSES)->count(),
-            'waiting_deposit' => (clone $statsQuery)->whereHas('salesOrder', fn($q)=>$q->where('confirmation_status','waiting_for_deposit'))->whereIn('status', self::ACTIVE_STATUSES)->count(),
-            'need_design' => (clone $statsQuery)->whereDate('delivery_date','<=',today()->addDays(10))->whereHas('salesOrder', fn($q)=>$q->where('design_status','need_design'))->whereIn('status', self::ACTIVE_STATUSES)->count(),
+            'waiting_deposit' => (clone $statsQuery)->whereHas('salesOrder', fn($q)=>$q->where('simple_confirmation','waiting_deposit'))->whereIn('status', self::ACTIVE_STATUSES)->count(),
+            'need_design' => (clone $statsQuery)->whereDate('delivery_date','<=',today()->addDays(10))->whereHas('salesOrder', fn($q)=>$q->where('simple_design','need_designer'))->whereIn('status', self::ACTIVE_STATUSES)->count(),
+        ];
+
+        // Real list content for the three compact dropdowns — not just
+        // counts. Each query mirrors its corresponding stat above exactly,
+        // so the number on the button and the rows inside it can never
+        // disagree.
+        $quickLists = [
+            'overdue' => (clone $statsQuery)->with('salesOrder', 'customer')->whereDate('delivery_date', '<', $today)->whereIn('status', self::ACTIVE_STATUSES)->orderBy('delivery_date')->limit(30)->get(),
+            'waiting_deposit' => (clone $statsQuery)->with('salesOrder', 'customer')->whereHas('salesOrder', fn($q)=>$q->where('simple_confirmation','waiting_deposit'))->whereIn('status', self::ACTIVE_STATUSES)->orderBy('delivery_date')->limit(30)->get(),
+            'need_design' => (clone $statsQuery)->with('salesOrder', 'customer')->whereDate('delivery_date','<=',today()->addDays(10))->whereHas('salesOrder', fn($q)=>$q->where('simple_design','need_designer'))->whereIn('status', self::ACTIVE_STATUSES)->orderBy('delivery_date')->limit(30)->get(),
         ];
 
         $calendarCounts = $this->visibleQuery()
@@ -244,6 +285,7 @@ class DeliveryController extends Controller
         return [
             'deliveries' => $deliveries,
             'stats' => $stats,
+            'quickLists' => $quickLists,
             'drivers' => $this->drivers(),
             'calendarDays' => $calendarDays,
             'calendarMonth' => $month,
@@ -256,7 +298,9 @@ class DeliveryController extends Controller
 
     private function visibleQuery(): Builder
     {
-        return DeliveryNote::query()->when($this->driverOnly(), fn ($query) => $query->where('driver_id', auth()->id()));
+        return DeliveryNote::query()
+            ->whereHas('salesOrder', fn ($q) => $q->whereNotIn('simple_status', ['delivered', 'canceled']))
+            ->when($this->driverOnly(), fn ($query) => $query->where('driver_id', auth()->id()));
     }
 
     private function applyFilters(Builder $query, Request $request): void

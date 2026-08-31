@@ -31,14 +31,65 @@ class SalesOrderController extends Controller
             $query->whereDate('order_month', $month->startOfMonth());
         }
         if (request('delivery_status')) $query->where('delivery_status', request('delivery_status'));
+        if (request('design_status')) $query->where('design_status', request('design_status'));
+        if (request('due') === 'this_week') {
+            $query->whereBetween('delivery_date', [today(), today()->endOfWeek()])->where('delivery_status', '!=', 'delivered');
+        }
 
         return view('orders.index', ['orders' => $query->orderByDesc('is_very_urgent')->orderBy('delivery_date')->paginate(30)->withQueryString()]);
+    }
+
+    public function checkCapacity(Request $request, DeliverySchedulingService $scheduler)
+    {
+        $request->validate(['date' => 'required|date']);
+        $date = \Carbon\Carbon::parse($request->query('date'));
+        $limit = $scheduler->dailyLimit();
+        $count = $scheduler->scheduledCount($date);
+        $full = $count >= $limit;
+        return response()->json([
+            'date' => $date->toDateString(),
+            'count' => $count,
+            'limit' => $limit,
+            'full' => $full,
+            'suggested_date' => $full ? $scheduler->nextAvailableDate($date->copy()->addDay())->toDateString() : null,
+        ]);
     }
 
     public function create()
     {
         abort_unless(auth()->user()->hasPermission('orders.manage'), 403);
         return view('orders.form', $this->formData(new SalesOrder));
+    }
+
+    /**
+     * "Repeat Order" — pre-fills a fresh create form with the customer
+     * and line items (products, customisation, prices as editable
+     * defaults) from a past order, but deliberately does NOT flash
+     * order_date or delivery_date, since a new order requires its own
+     * fresh dates rather than inheriting the original's.
+     */
+    public function repeat(SalesOrder $order)
+    {
+        abort_unless(auth()->user()->hasPermission('orders.manage'), 403);
+        $order->loadMissing('items.product', 'customer');
+
+        $items = $order->items->map(fn ($item) => [
+            'product_id' => $item->product_id,
+            'product_label' => $item->product ? $item->product->name_en.($item->product->sku ? ' · '.$item->product->sku : '') : null,
+            'description' => $item->description,
+            'qty' => $item->qty,
+            'unit_price' => $item->unit_price,
+            'tax_rate' => 5,
+            'customisation' => $item->customisation['notes'] ?? '',
+            'is_manual' => !$item->product_id,
+        ])->all();
+
+        return redirect()->route('orders.create')->withInput([
+            'customer_label' => $order->customer ? $order->customer->name.($order->customer->phone ? ' · '.$order->customer->phone : '') : '',
+            'customer_id' => $order->customer_id,
+            'customer_phone' => $order->customer_phone,
+            'items' => $items,
+        ])->with('info', "Repeating Order {$order->order_number} — review products and prices, then set a new order date and delivery date.");
     }
 
     public function store(Request $request, NumberingService $numbers, DocumentTotals $totals, SalesWorkflow $workflow)
@@ -265,8 +316,28 @@ class SalesOrderController extends Controller
 
     public function show(SalesOrder $order)
     {
-        $order->load('customer', 'items.product', 'productionJob', 'deliveryNote', 'invoices', 'statusHistory.changedBy');
-        return view('orders.show', ['order' => $order, 'drivers' => User::whereHas('roles', fn ($q) => $q->whereIn('name', ['driver', 'delivery_coordinator']))->where('is_active', true)->get()]);
+        $order->load('customer', 'items.product', 'productionJob.costs', 'deliveryNote', 'invoices', 'statusHistory.changedBy', 'comments.user', 'attachments.uploader');
+        $timeline = $order->statusHistory->sortBy('created_at')->values();
+        $profit = auth()->user()->hasPermission('reports.financial') ? app(\App\Services\ProfitCalculatorService::class)->forOrder($order) : null;
+        return view('orders.show', ['order' => $order, 'profit' => $profit, 'timeline' => $timeline, 'drivers' => User::whereHas('roles', fn ($q) => $q->whereIn('name', ['driver', 'delivery_coordinator']))->where('is_active', true)->get()]);
+    }
+
+    /** The new simplified Status field (Pending/Ready/Delivered/Canceled) — replaces the old Confirmation/Design/Production/Delivery workflow in the Sales UI. Goes through SimpleWorkflowService so Deliveries always sees the identical value. */
+    public function updateSimpleStatus(Request $request, SalesOrder $order, \App\Services\SimpleWorkflowService $workflow)
+    {
+        $data = $request->validate([
+            'simple_status' => 'required|in:pending,ready,delivered,canceled',
+            'fulfillment_type' => 'sometimes|in:delivery,pickup',
+            'driver_id' => 'nullable|exists:users,id',
+            'delivery_date' => 'nullable|date',
+        ]);
+        $old = $order->simple_status;
+        $workflow->setStatus($order, $data['simple_status']);
+        if ($old !== $data['simple_status']) {
+            SalesOrderStatusHistory::create(['sales_order_id' => $order->id, 'field' => 'status', 'old_value' => $old, 'new_value' => $data['simple_status'], 'changed_by' => auth()->id()]);
+        }
+        $order->update(collect($data)->only(['fulfillment_type', 'driver_id', 'delivery_date'])->all());
+        return back()->with('success', 'Status updated.');
     }
 
     public function updateStatus(Request $request, SalesOrder $order)
@@ -318,6 +389,7 @@ class SalesOrderController extends Controller
             'manual_reference'=>'required|string|max:10|regex:/^[A-Za-z0-9]+$/',
             'order_date'=>'required|date','delivery_date'=>'required|date','emirate'=>'required|string|max:50',
             'delivery_address'=>'nullable|string|max:2000','priority'=>'required|in:normal,urgent,high',
+            'fulfillment_type'=>'sometimes|in:delivery,pickup',
             'is_very_urgent'=>'nullable|boolean','notes'=>'nullable|string|max:5000','items'=>'required|array|min:1',
             'items.*.product_id'=>'nullable|exists:products,id',
             'items.*.description'=>'required_without:items.*.product_id|nullable|string|max:255',
@@ -333,6 +405,7 @@ class SalesOrderController extends Controller
             'customer_id'=>$customer->id,'customer_phone'=>($data['customer_phone'] ?? null) ?: $customer->phone,
             'order_date'=>$data['order_date'],'delivery_date'=>$data['delivery_date'],'emirate'=>$data['emirate'],
             'delivery_address'=>($data['delivery_address'] ?? null) ?: $customer->delivery_address,'priority'=>$data['priority'],
+            'fulfillment_type'=>$data['fulfillment_type'] ?? 'delivery',
             'is_very_urgent'=>$data['is_very_urgent'] ?? false,'notes'=>$data['notes'] ?? null,
         ];
     }

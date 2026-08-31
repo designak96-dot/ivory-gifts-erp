@@ -96,6 +96,89 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Notification bell dropdown toggle, with outside-click-to-close.
+  document.querySelector('[data-notif-toggle]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelector('[data-notif-dropdown]')?.toggleAttribute('hidden');
+  });
+  document.addEventListener('click', (e) => {
+    const dropdown = document.querySelector('[data-notif-dropdown]');
+    if (!dropdown || dropdown.hasAttribute('hidden')) return;
+    if (!e.target.closest('.notif-bell-wrap')) dropdown.setAttribute('hidden', '');
+  });
+
+  // Global search: debounced fetch across Sales Orders, Invoices,
+  // Customers, Products, Payments (server-side, permission-aware — see
+  // GlobalSearchController). Reuses the existing .combo/.combo-results
+  // styling (and its dropdown-clipping fix) rather than inventing new CSS.
+  (() => {
+    const input = document.querySelector('[data-global-search-input]');
+    const resultsBox = document.querySelector('[data-global-search-results]');
+    if (!input || !resultsBox) return;
+    let debounce;
+    input.addEventListener('input', () => {
+      clearTimeout(debounce);
+      const term = input.value.trim();
+      if (term.length < 2) { resultsBox.innerHTML = ''; return; }
+      debounce = setTimeout(async () => {
+        try {
+          const res = await fetch(`/search?q=${encodeURIComponent(term)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          const items = res.ok ? await res.json() : [];
+          resultsBox.innerHTML = items.length
+            ? items.map((r) => `<div class="search-result" data-url="${r.url}"><span><b>${r.type}</b> — ${r.label}</span></div>`).join('')
+            : '<div class="search-empty">No matches.</div>';
+        } catch (e) {
+          resultsBox.innerHTML = '';
+        }
+      }, 250);
+    });
+    resultsBox.addEventListener('mousedown', (e) => {
+      const item = e.target.closest('[data-url]');
+      if (!item) return;
+      e.preventDefault();
+      window.location.href = item.dataset.url;
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.global-search')) resultsBox.innerHTML = '';
+    });
+  })();
+
+  // Theme toggle: dark is the default (set by the inline no-flash script
+  // in <head>, which runs before CSS renders — this handler only needs
+  // to flip it and persist the choice). Applies globally since every
+  // themed rule is driven by the [data-theme="light"] attribute selector
+  // on <html>, not a page-specific class.
+  document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const html = document.documentElement;
+      const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      html.setAttribute('data-theme', next);
+      try { localStorage.setItem('ivory-theme', next); } catch (e) { /* storage unavailable — theme still applies for this session */ }
+    });
+  });
+
+  // Mobile sidebar drawer toggle. The button (data-sidebar, both the
+  // topbar hamburger and the mobile bottom-nav "More") and the CSS
+  // (.sidebar.open) both already existed, but nothing in JS ever
+  // connected them — a real, pre-existing bug: the mobile menu button
+  // did nothing at all when tapped. Also closes on an outside tap/click
+  // and on pressing Escape, matching standard drawer behavior.
+  document.querySelectorAll('[data-sidebar]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('sidebar')?.classList.toggle('open');
+    });
+  });
+  document.addEventListener('click', (e) => {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar || !sidebar.classList.contains('open')) return;
+    if (sidebar.contains(e.target) || e.target.closest('[data-sidebar]')) return;
+    sidebar.classList.remove('open');
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.getElementById('sidebar')?.classList.remove('open');
+  });
+
   // Proof viewer: opens payment/expense proof in a popup dialog within
   // the same tab, instead of target="_blank" navigating to a whole new
   // browser tab. The iframe src is only set when the dialog actually
@@ -129,6 +212,136 @@ document.addEventListener('DOMContentLoaded', () => {
     reader.onload = () => {
       preview.innerHTML = `<img src="${reader.result}" alt="" style="max-height:80px;border-radius:8px">`;
     };
-    reader.readAsDataURL(file);
+    document.querySelectorAll('[data-copy-text]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copyText);
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      } catch { alert('Could not copy — please copy the link manually.'); }
+    });
+  });
+
+  reader.readAsDataURL(file);
+  });
+
+  // Confirmed Order Proof — drag & drop + click to browse. Works
+  // wherever the widget partial is rendered (Sales Orders or
+  // Deliveries, list rows or detail pages) since it's driven entirely
+  // by data attributes, not page-specific IDs.
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  function wireProofWidget(widget) {
+    const uploadUrl = widget.dataset.uploadUrl;
+    const input = widget.querySelector('[data-proof-input]');
+    const trigger = widget.querySelector('[data-proof-trigger]');
+    const replaceBtn = widget.querySelector('[data-proof-replace]');
+    const deleteBtn = widget.querySelector('[data-proof-delete]');
+
+    const doUpload = async (file) => {
+      if (!file) return;
+      const form = new FormData();
+      form.append('file', file);
+      widget.classList.add('proof-uploading');
+      try {
+        const res = await fetch(uploadUrl, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' }, body: form });
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Upload failed'); }
+        location.reload();
+      } catch (e) {
+        widget.classList.remove('proof-uploading');
+        alert(e.message || 'Could not upload proof — please try again.');
+      }
+    };
+
+    trigger?.addEventListener('click', () => input.click());
+    replaceBtn?.addEventListener('click', (e) => { e.preventDefault(); input.click(); });
+    input?.addEventListener('change', () => doUpload(input.files?.[0]));
+
+    // Drag & drop over the whole widget.
+    ['dragenter', 'dragover'].forEach((evt) => widget.addEventListener(evt, (e) => { e.preventDefault(); widget.classList.add('proof-dragover'); }));
+    ['dragleave', 'drop'].forEach((evt) => widget.addEventListener(evt, (e) => { e.preventDefault(); widget.classList.remove('proof-dragover'); }));
+    widget.addEventListener('drop', (e) => { const file = e.dataTransfer?.files?.[0]; if (file) doUpload(file); });
+
+    deleteBtn?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const chip = e.target.closest('[data-proof-chip]');
+      if (!chip || !confirm('Delete this proof? This cannot be undone.')) return;
+      try {
+        const res = await fetch(chip.dataset.deleteUrl, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' } });
+        if (!res.ok) throw new Error();
+        location.reload();
+      } catch { alert('Could not delete — please try again.'); }
+    });
+  }
+  document.querySelectorAll('[data-proof-widget]').forEach(wireProofWidget);
+
+  // WhatsApp share — checks Invoice/Proof state first, shows the
+  // required modals, then opens the pre-filled wa.me link. Staff always
+  // presses Send themselves inside WhatsApp; nothing here sends
+  // anything automatically.
+  function buildModal(title, message, buttons) {
+    const overlay = document.createElement('div');
+    overlay.className = 'wa-modal-overlay';
+    const box = document.createElement('div');
+    box.className = 'wa-modal-box';
+    box.innerHTML = `<h3>${title}</h3><p>${message}</p><div class="wa-modal-actions"></div>`;
+    const actions = box.querySelector('.wa-modal-actions');
+    buttons.forEach(({ label, primary, onClick }) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn' + (primary ? ' primary' : '');
+      btn.textContent = label;
+      btn.addEventListener('click', () => { overlay.remove(); onClick?.(); });
+      actions.appendChild(btn);
+    });
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  }
+
+  document.querySelectorAll('[data-whatsapp-share]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const checkRes = await fetch(btn.dataset.checkUrl, { headers: { Accept: 'application/json' } });
+        const check = await checkRes.json();
+
+        if (!check.has_invoice) {
+          buildModal('Invoice required', 'Invoice has not been generated for this order.', [
+            { label: 'Cancel' },
+            { label: 'Generate Invoice', primary: true, onClick: () => {
+              const f = document.createElement('form');
+              f.method = 'POST'; f.action = check.generate_invoice_url;
+              f.innerHTML = `<input type="hidden" name="_token" value="${csrfToken}">`;
+              document.body.appendChild(f); f.submit();
+            } },
+          ]);
+          return;
+        }
+
+        const openWhatsApp = async () => {
+          const linkRes = await fetch(btn.dataset.linkUrl, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken, Accept: 'application/json' } });
+          if (!linkRes.ok) { alert('Could not prepare the WhatsApp message — please try again.'); return; }
+          const data = await linkRes.json();
+          const whatsappUrl = 'https://wa.me/' + data.phone + '?text=' + encodeURIComponent(data.message);
+          window.open(whatsappUrl, '_blank');
+        };
+
+        if (!check.has_proof) {
+          buildModal('Confirmed Order proof', 'Confirmed Order proof has not been uploaded.', [
+            { label: 'Continue Without Proof', primary: true, onClick: openWhatsApp },
+            { label: 'Upload Proof', onClick: () => { document.querySelector('[data-proof-trigger]')?.click(); } },
+          ]);
+          return;
+        }
+
+        await openWhatsApp();
+      } catch {
+        alert('Could not check order status — please try again.');
+      } finally {
+        btn.disabled = false;
+      }
+    });
   });
 });

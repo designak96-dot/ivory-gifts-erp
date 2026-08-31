@@ -3,10 +3,10 @@
 @section('subtitle','The selected delivery date automatically places this order in the delivery schedule')
 @section('content')
 @php
-$savedLines=$order->exists?$order->items->map(fn($item)=>['product_id'=>$item->product_id,'product_label'=>$item->product?($item->product->name_en.($item->product->sku?' · '.$item->product->sku:'')):null,'description'=>$item->description,'qty'=>$item->qty,'unit_price'=>$item->unit_price,'tax_rate'=>5,'customisation'=>$item->customisation['notes']??'','is_manual'=>!$item->product_id])->all():[['product_id'=>'','product_label'=>null,'description'=>'','qty'=>1,'unit_price'=>0,'tax_rate'=>5,'customisation'=>'','is_manual'=>false]];
+$savedLines=$order->exists?$order->items->map(fn($item)=>['product_id'=>$item->product_id,'product_label'=>$item->product?($item->product->name_en.($item->product->sku?' · '.$item->product->sku:'')):null,'description'=>$item->description,'qty'=>$item->qty,'unit_price'=>$item->unit_price,'tax_rate'=>($item->qty*$item->unit_price)>0?round($item->tax_amount/($item->qty*$item->unit_price)*100,2):0,'customisation'=>$item->customisation['notes']??'','is_manual'=>!$item->product_id])->all():[['product_id'=>'','product_label'=>null,'description'=>'','qty'=>1,'unit_price'=>0,'tax_rate'=>5,'customisation'=>'','is_manual'=>false]];
 $lines=old('items',$savedLines);
 @endphp
-<form method="post" action="{{ $order->exists?route('orders.update',$order):route('orders.store') }}" data-order-form data-quick-customer="{{ route('orders.quick-customer') }}" data-quick-product="{{ route('orders.quick-product') }}" data-customer-search-url="{{ route('orders.search-customers') }}" data-product-search-url="{{ route('orders.search-products') }}">@csrf @if($order->exists)@method('put')@endif
+<form method="post" action="{{ $order->exists?route('orders.update',$order):route('orders.store') }}" data-order-form data-is-new-order="{{ $order->exists?'0':'1' }}" data-quick-customer="{{ route('orders.quick-customer') }}" data-quick-product="{{ route('orders.quick-product') }}" data-customer-search-url="{{ route('orders.search-customers') }}" data-product-search-url="{{ route('orders.search-products') }}">@csrf @if($order->exists)@method('put')@endif
 <div class="card"><div class="form-grid">
 <label class="span-2">Customer
   <div class="combo-input-row">
@@ -22,9 +22,10 @@ $lines=old('items',$savedLines);
 <label>Order Number<input name="manual_reference" data-manual-reference value="{{ old('manual_reference',$order->manual_reference) }}" maxlength="10" required @if($order->exists) readonly title="Set once at creation, part of the permanent order number" @endif></label>
 <label>Order date<input type="date" name="order_date" data-order-date value="{{ old('order_date',$order->order_date?->toDateString()??today()->toDateString()) }}" required></label>
 <label>Final order number<output data-final-order-number>{{ $order->exists ? $order->order_number : '—' }}</output></label>
-<label>Delivery date<input type="date" name="delivery_date" value="{{ old('delivery_date',$order->delivery_date?->toDateString()) }}" required></label>
+<label>Delivery date<input type="date" name="delivery_date" data-capacity-check value="{{ old('delivery_date',$order->delivery_date?->toDateString()) }}" required><small data-capacity-message></small></label>
 <label>Delivery location<select name="emirate" data-customer-location required><option value="">Select location</option>@foreach($locations as $location)<option value="{{ $location }}" @selected(old('emirate',$order->emirate)===$location)>{{ $location }}</option>@endforeach</select></label>
 <label>Priority<select name="priority"><option value="normal" @selected(old('priority',$order->priority?:'normal')==='normal')>Normal</option><option value="urgent" @selected(old('priority',$order->priority)==='urgent')>Urgent</option><option value="high" @selected(old('priority',$order->priority)==='high')>High</option></select></label>
+<label>Fulfillment<select name="fulfillment_type" data-fulfillment-type><option value="delivery" @selected(old('fulfillment_type',$order->fulfillment_type?:'delivery')==='delivery')>Delivery</option><option value="pickup" @selected(old('fulfillment_type',$order->fulfillment_type)==='pickup')>Pickup from store</option></select></label>
 <label class="check"><input type="hidden" name="is_very_urgent" value="0"><input type="checkbox" name="is_very_urgent" value="1" @checked(old('is_very_urgent',$order->is_very_urgent))> Mark very urgent</label>
 <label class="span-2">Delivery address<textarea name="delivery_address" data-customer-address>{{ old('delivery_address',$order->delivery_address) }}</textarea></label>
 </div></div>

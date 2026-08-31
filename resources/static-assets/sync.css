@@ -1,2 +1,2 @@
-.sync-banner{position:fixed;right:18px;bottom:18px;z-index:50;border:0;border-radius:10px;padding:12px 16px;background:#5b5fef;color:#fff;font-weight:800;box-shadow:0 12px 35px rgba(73,55,42,.18);cursor:pointer}
+.sync-banner{position:fixed;right:18px;bottom:18px;z-index:50;border:0;border-radius:10px;padding:12px 16px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#04121a;font-weight:800;box-shadow:0 12px 35px rgba(0,0,0,.4),0 0 20px rgba(34,211,238,.3);cursor:pointer}
 @media(max-width:800px){.sync-banner{bottom:72px;left:14px;right:14px;width:calc(100% - 28px)}}

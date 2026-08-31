@@ -5,7 +5,7 @@ use App\Services\{NumberingService,PhoneNormalizer};
 use Illuminate\Http\Request;
 class CustomerController extends Controller
 {
-    public function index(){ $q=Customer::query(); if($s=request('q'))$q->where(fn($x)=>$x->where('name','like',"%$s%")->orWhere('company_name','like',"%$s%")->orWhere('phone','like',"%$s%")->orWhere('customer_code','like',"%$s%"));return view('customers.index',['customers'=>$q->latest()->paginate(25)]);}
+    public function index(){ $q=Customer::with('tags'); if($s=request('q'))$q->where(fn($x)=>$x->where('name','like',"%$s%")->orWhere('company_name','like',"%$s%")->orWhere('phone','like',"%$s%")->orWhere('customer_code','like',"%$s%"));if($tagId=request('tag'))$q->whereHas('tags',fn($t)=>is_numeric($tagId)?$t->where('tags.id',$tagId):$t->where('tags.name',$tagId));return view('customers.index',['customers'=>$q->latest()->paginate(25),'tags'=>\App\Models\Tag::orderBy('name')->get(),'activeTag'=>$tagId]);}
     public function create(){abort_unless(auth()->user()->hasPermission('customers.manage'),403);return view('customers.form',['customer'=>new Customer]);}
     public function store(Request $request,NumberingService $numbers,PhoneNormalizer $phones){
         abort_unless(auth()->user()->hasPermission('customers.manage'),403);
@@ -32,7 +32,25 @@ class CustomerController extends Controller
 
         $data['customer_code']=$numbers->next('customer');$data['created_by']=auth()->id();$data['updated_by']=auth()->id();$customer=Customer::create($data);return redirect()->route('customers.show',$customer)->with('success','Customer created.');
     }
-    public function show(Customer $customer){return view('customers.show',compact('customer'));}
+    public function show(Customer $customer){
+        $customer->load('tags');
+        $lifetimeValue = app(\App\Services\CustomerLifetimeValueService::class)->forCustomer($customer);
+        $favouriteProducts = \App\Models\SalesOrderItem::selectRaw('product_id, SUM(qty) as total_qty, COUNT(DISTINCT sales_order_id) as order_count')
+            ->whereNotNull('product_id')
+            ->whereHas('order', fn ($q) => $q->where('customer_id', $customer->id))
+            ->groupBy('product_id')
+            ->orderByDesc('order_count')
+            ->with('product:id,name_en,sku')
+            ->limit(6)
+            ->get();
+        return view('customers.show',compact('customer','favouriteProducts','lifetimeValue')+['allTags' => \App\Models\Tag::orderBy('name')->get()]);
+    }
+    public function syncTags(Request $request, Customer $customer){
+        abort_unless(auth()->user()->hasPermission('customers.manage'),403);
+        $data = $request->validate(['tags' => 'array', 'tags.*' => 'exists:tags,id']);
+        $customer->tags()->sync($data['tags'] ?? []);
+        return back()->with('success', 'Tags updated.');
+    }
     public function edit(Customer $customer){abort_unless(auth()->user()->hasPermission('customers.manage'),403);return view('customers.form',compact('customer'));}
     public function update(Request $request,Customer $customer,PhoneNormalizer $phones){abort_unless(auth()->user()->hasPermission('customers.manage'),403);$data=$this->validated($request,$phones);$data['updated_by']=auth()->id();$customer->update($data);return redirect()->route('customers.show',$customer)->with('success','Customer updated.');}
 

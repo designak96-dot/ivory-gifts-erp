@@ -12,11 +12,34 @@
 <div class="toolbar no-print"><div><a class="btn" href="{{ route('deliveries.index') }}">Back to schedule</a><button class="btn" onclick="print()">Print delivery note</button><a class="btn" href="{{ request()->fullUrlWithQuery(['hide_prices'=>$hidePrices?0:1]) }}">{{ $hidePrices ? 'Show prices' : 'Hide prices' }}</a></div><div>@if($mapUrl)<a class="btn" target="_blank" href="{{ $mapUrl }}">Open map</a>@endif @if($delivery->customer->whatsapp_url)<a class="btn success" target="_blank" href="{{ $delivery->customer->whatsapp_url }}?text={{ urlencode($message) }}">WhatsApp customer</a>@endif</div></div>
 <div class="card delivery-document document-a4">
     <h1 class="doc-type-heading">Delivery Note</h1><div class="doc-header"><div>@if($companyLogoUrl ?? null)<img src="{{ $companyLogoUrl }}" alt="{{ $companyName }}" class="doc-logo">@endif<p class="muted">TRN {{ $settings['company_trn'] ?? '—' }}</p>@if($settings['company_address']??null)<p class="muted">{{ $settings['company_address'] }}</p>@endif@if($settings['company_phone']??null)<p class="muted">{{ $settings['company_phone'] }}</p>@endif</div><div><b>Deliver to</b><p><b>{{ $delivery->customer->name }}</b></p>@include('partials._customer-address-block',['customer'=>$delivery->customer,'deliveryAddressOverride'=>$address])</div><div><p><b>{{ $delivery->delivery_note_number }}</b></p><p class="muted">Order Number: {{ $delivery->salesOrder->order_number }}</p><b>Delivery date</b><p>{{ $delivery->delivery_date?->format('d M Y') ?? 'Not set' }}</p><span class="badge {{ $delivery->status==='delivered'?'green':'amber' }}">{{ str($delivery->status)->replace('_',' ')->title() }}</span></div></div>
-    <div class="delivery-meta"><span><small>Driver</small><b>{{ $delivery->driver?->name ?? 'Unassigned' }}</b></span><span><small>Package</small><b>{{ ucfirst($delivery->package_size) }}</b></span>@unless($hidePrices)<span><small>Delivery charge</small><b>AED {{ number_format($delivery->delivery_charge,2) }}</b></span>@endunless<span><small>Attempts</small><b>{{ $delivery->attempt_count }}</b></span></div>
+    <div class="delivery-meta"><span><small>Driver</small><b>{{ $delivery->salesOrder->fulfillment_type==='pickup' ? 'Pickup — customer collects' : ($delivery->driver?->name ?? 'Unassigned') }}</b></span><span><small>Package</small><b>{{ ucfirst($delivery->package_size) }}</b></span>@unless($hidePrices)<span><small>Delivery charge</small><b>AED {{ number_format($delivery->delivery_charge,2) }}</b></span>@endunless<span><small>Attempts</small><b>{{ $delivery->attempt_count }}</b></span></div>
     <div class="table-wrap"><table><thead><tr><th>Item</th><th>Customisation</th><th>Quantity</th>@unless($hidePrices)<th>Rate</th><th>Total</th>@endunless</tr></thead><tbody>@foreach($delivery->salesOrder->items as $item)<tr><td>{{ $item->description }}</td><td>{{ $item->customisation['notes']??'—' }}</td><td>{{ $item->qty }}</td>@unless($hidePrices)<td>AED {{ number_format($item->unit_price,2) }}</td><td class="amount">AED {{ number_format($item->line_total,2) }}</td>@endunless</tr>@endforeach</tbody></table></div>
     <div class="doc-footer">@if($settings['document_footer']??null)<p class="muted doc-footer-text">{{ $settings['document_footer'] }}</p>@endif</div>
 </div>
 @if(auth()->user()->hasPermission('deliveries.manage'))
+<div class="card no-print" style="margin-top:18px"><h2>Order Status</h2>
+@php($order=$delivery->salesOrder)
+<div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+<span class="badge {{ ['pending'=>'amber','ready'=>'blue','delivered'=>'green','canceled'=>'red'][$order->simple_status] ?? 'amber' }}">{{ ucfirst($order->simple_status) }}</span>
+@if(in_array($order->simple_status,['ready','delivered']))<button type="button" class="btn small success" data-whatsapp-share data-check-url="{{ route('whatsapp.check',$order) }}" data-link-url="{{ route('whatsapp.link',$order) }}">💬 WhatsApp</button>@endif
+@include('partials._confirmed-proof-widget',['order'=>$order])
+@if($order->simple_status==='canceled')
+<span class="badge red">Confirmation: N/A</span>
+<span class="badge red">Design: N/A</span>
+@else
+<span class="badge {{ ['not_confirmed'=>'red','waiting_deposit'=>'blue','confirmed'=>'green'][$order->simple_confirmation] }}">{{ str($order->simple_confirmation)->replace('_',' ')->title() }}</span>
+<span class="badge {{ $order->simple_design==='designed'?'green':'red' }}">{{ $order->simple_design==='designed'?'Designed':'Need Designer' }}</span>
+@endif
+<span class="muted">{{ $order->fulfillment_type==='pickup' ? '🚶 Pickup' : '🚚 '.($delivery->driver?->name ?? 'Unassigned') }}</span>
+</div>
+@if(auth()->user()->hasPermission('deliveries.manage'))
+<div style="margin-top:15px;display:flex;gap:20px;flex-wrap:wrap">
+<form method="post" action="{{ route('deliveries.order-workflow',$delivery) }}">@csrf @method('patch')<input type="hidden" name="field" value="status"><label>Status<select name="value" onchange="this.form.submit()">@foreach(['pending'=>'Pending','ready'=>'Ready','delivered'=>'Delivered','canceled'=>'Canceled'] as $val=>$label)<option value="{{ $val }}" @selected($order->simple_status===$val)>{{ $label }}</option>@endforeach</select></label></form>
+<form method="post" action="{{ route('deliveries.order-workflow',$delivery) }}">@csrf @method('patch')<input type="hidden" name="field" value="confirmation"><label>Confirmation<select name="value" onchange="this.form.submit()"><option value="not_confirmed" @selected($order->simple_confirmation==='not_confirmed')>Not Confirmed</option><option value="waiting_deposit" @selected($order->simple_confirmation==='waiting_deposit')>Waiting For Deposit</option><option value="confirmed" @selected($order->simple_confirmation==='confirmed')>Confirmed</option></select></label></form>
+<form method="post" action="{{ route('deliveries.order-workflow',$delivery) }}">@csrf @method('patch')<input type="hidden" name="field" value="design"><label>Design<select name="value" onchange="this.form.submit()"><option value="need_designer" @selected($order->simple_design==='need_designer')>Need Designer</option><option value="designed" @selected($order->simple_design==='designed')>Designed</option></select></label></form>
+</div>
+@endif
+</div>
 <form method="post" enctype="multipart/form-data" action="{{ route('deliveries.update',$delivery) }}" class="card no-print delivery-update-form">@csrf @method('patch')
     <div class="card-header"><div><h2>{{ $isDriverOnly ? 'Driver update' : 'Schedule and delivery update' }}</h2><p class="muted">Changes appear automatically for other logged-in staff.</p></div></div>
     <div class="form-grid">

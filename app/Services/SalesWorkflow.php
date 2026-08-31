@@ -55,6 +55,7 @@ class SalesWorkflow
             ];
             if((float)$invoice->tax_total>0)$lines[]=['account'=>'2100','debit'=>0,'credit'=>(float)$invoice->tax_total];
             $this->accounting->post($invoice,"Invoice {$invoice->invoice_number}",$lines,(string)$invoice->invoice_date);
+            \App\Models\SalesOrderStatusHistory::create(['sales_order_id'=>$order->id,'field'=>'invoice','old_value'=>null,'new_value'=>$invoice->invoice_number,'changed_by'=>auth()->id()]);
             return $invoice->load('items','customer');
         });
     }
@@ -71,6 +72,9 @@ class SalesWorkflow
             $payment->allocations()->create(['invoice_id'=>$invoice->id,'allocated_amount'=>$amount]);
             $invoice->amount_paid=round((float)$invoice->amount_paid+$amount,2); $invoice->outstanding_amount=round((float)$invoice->grand_total-(float)$invoice->amount_paid,2); $invoice->status=$invoice->outstanding_amount<=0?'paid':'partially_paid'; $invoice->save();
             $order=$invoice->salesOrder; if($order) $order->update(['payment_status'=>$invoice->status==='paid'?'paid':'partial','confirmation_status'=>'confirmed']);
+            if ($order) {
+                \App\Models\SalesOrderStatusHistory::create(['sales_order_id'=>$order->id,'field'=>'payment','old_value'=>null,'new_value'=>'AED '.number_format($amount,2).' via '.$data['method'].' (Payment '.$payment->payment_number.')','changed_by'=>auth()->id()]);
+            }
             $cashAccount=in_array($data['method'],['cash','cod'],true)?'1000':'1010';
             $this->accounting->post($payment,"Payment {$payment->payment_number}",[['account'=>$cashAccount,'debit'=>$amount,'credit'=>0],['account'=>'1100','debit'=>0,'credit'=>$amount]],$data['payment_date']);
             return $payment;
