@@ -59,8 +59,67 @@
         });
     };
 
+    const whatsappWindowName = 'ivory_whatsapp';
+    let whatsappWebWindow = null;
+    let cancelPendingWhatsAppFallback = null;
+
+    const openWhatsAppWeb = (whatsappWebUrl) => {
+        try {
+            if (whatsappWebWindow && !whatsappWebWindow.closed) {
+                whatsappWebWindow.location.replace(whatsappWebUrl);
+                whatsappWebWindow.focus();
+                return;
+            }
+        } catch (error) {
+            whatsappWebWindow = null;
+        }
+
+        whatsappWebWindow = window.open(whatsappWebUrl, whatsappWindowName);
+        whatsappWebWindow?.focus();
+    };
+
+    const openPreferredWhatsApp = (whatsappAppUrl, whatsappWebUrl) => {
+        cancelPendingWhatsAppFallback?.();
+
+        let appOpened = false;
+        let fallbackTimer = null;
+        const probe = document.createElement('iframe');
+        probe.hidden = true;
+        probe.setAttribute('aria-hidden', 'true');
+        probe.style.display = 'none';
+
+        const cleanup = () => {
+            if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+            document.removeEventListener('visibilitychange', markAppOpened);
+            window.removeEventListener('blur', markAppOpened);
+            probe.remove();
+            if (cancelPendingWhatsAppFallback === cleanup) cancelPendingWhatsAppFallback = null;
+        };
+
+        const markAppOpened = () => {
+            if (!document.hidden && document.hasFocus()) return;
+            appOpened = true;
+            cleanup();
+        };
+
+        document.addEventListener('visibilitychange', markAppOpened);
+        window.addEventListener('blur', markAppOpened);
+        document.body.appendChild(probe);
+        probe.src = whatsappAppUrl;
+
+        fallbackTimer = window.setTimeout(() => {
+            cleanup();
+            if (!appOpened) openWhatsAppWeb(whatsappWebUrl);
+        }, 2500);
+
+        cancelPendingWhatsAppFallback = cleanup;
+    };
+
     document.addEventListener('click', async (event) => {
-        const btn = event.target.closest('[data-whatsapp-share][data-whatsapp-status="ready"]');
+        const btn = event.target.closest(
+            '[data-whatsapp-share][data-whatsapp-status="ready"], '
+            + '[data-ready-whatsapp-share][data-whatsapp-status="ready"]'
+        );
         if (!btn) return;
 
         event.preventDefault();
@@ -106,8 +165,11 @@
 
                 const data = await linkRes.json();
                 const finalMessage = buildReadyMessage(data);
-                const whatsappUrl = 'https://wa.me/' + data.phone + '?text=' + encodeURIComponent(finalMessage);
-                window.open(whatsappUrl, '_blank');
+                const encodedPhone = encodeURIComponent(data.phone);
+                const encodedMessage = encodeURIComponent(finalMessage);
+                const whatsappAppUrl = 'whatsapp://send?phone=' + encodedPhone + '&text=' + encodedMessage;
+                const whatsappWebUrl = 'https://web.whatsapp.com/send?phone=' + encodedPhone + '&text=' + encodedMessage;
+                openPreferredWhatsApp(whatsappAppUrl, whatsappWebUrl);
             };
 
             if (!check.has_proof) {

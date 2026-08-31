@@ -1,3 +1,1 @@
-app/Http/Controllers/WhatsAppShareController.php
-public/build/assets/app.js
-resources/js/bootstrap.js
+resources/views/partials/_ready-whatsapp-js.blade.php
