@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\{AccountingController,AuditController,AuthController,BackupController,CalendarController,CashflowController,CashReconciliationController,CreditNoteController,CustomerController,DashboardController,DataImportController,DeliveryController,ExpenseBudgetController,ExpenseController,ExportController,FinancialAccountController,GlobalSearchController,ImportExportController,InventoryController,InvoiceController,IvoryAiController,LegacyDeliveryImportController,OrderAttachmentController,OrderCommentController,ProductController,ProductImportController,ProductionController,ProofController,PublicShareController,PurchaseOrderController,QuotationController,RecoverySnapshotController,ReportController,SalesOrderController,SavedFilterController,SettingsController,SetupController,ShareLinkController,SupplierController,SyncVersionController,SystemHealthController,TaskController,UserController,VatReportController,WhatsAppShareController};
+use App\Http\Controllers\{AccountingController,AuditController,AuthController,BackupController,BankReconciliationController,CalendarController,CashflowController,CashReconciliationController,CreditNoteController,CustomerController,DashboardController,DataImportController,DeliveryController,ExpenseBudgetController,ExpenseController,ExportController,FinancialAccountController,GlobalSearchController,ImportExportController,InventoryController,InvoiceController,IvoryAiController,LegacyDeliveryImportController,OrderAttachmentController,OrderCommentController,ProductController,ProductImportController,ProductionController,ProofController,PublicShareController,PurchaseOrderController,QuotationController,RawMaterialController,RecoverySnapshotController,ReportController,SalesOrderController,SavedFilterController,SettingsController,SetupController,ShareLinkController,SupplierController,SyncVersionController,SystemHealthController,TaskController,UserController,VatReportController,WhatsAppShareController};
 use Illuminate\Support\Facades\Route;
 
 Route::get('/setup', [SetupController::class,'create'])->name('setup.create');
@@ -16,6 +16,11 @@ Route::middleware('installed')->group(function(){
         Route::post('/customers/{customer}/tags',[CustomerController::class,'syncTags'])->middleware('permission:customers.manage')->name('customers.tags');
         Route::resource('products',ProductController::class)->except(['show','destroy'])->middleware('permission:products.view');
         Route::resource('suppliers',SupplierController::class)->except(['show','destroy'])->middleware('permission:purchases.view');
+        Route::get('/raw-materials',[RawMaterialController::class,'index'])->middleware('permission:purchases.view')->name('raw-materials.index');
+        Route::post('/raw-materials',[RawMaterialController::class,'store'])->middleware('permission:purchases.manage')->name('raw-materials.store');
+        Route::get('/raw-materials/{material}',[RawMaterialController::class,'show'])->middleware('permission:purchases.view')->name('raw-materials.show');
+        Route::post('/raw-materials/{material}/purchases',[RawMaterialController::class,'storePurchase'])->middleware('permission:purchases.manage')->name('raw-materials.purchases.store');
+        Route::get('/raw-material-purchases/{purchase}/invoice',[RawMaterialController::class,'downloadInvoice'])->middleware('permission:purchases.view')->name('raw-material-purchases.invoice');
         Route::resource('quotations',QuotationController::class)->only(['index','create','store','show','edit','update'])->middleware('permission:quotations.view');
         Route::get('/quotations/{quotation}/versions/{version}',[QuotationController::class,'showVersion'])->middleware('permission:quotations.view')->name('quotations.version');
         Route::post('/quotations/{quotation}/convert',[QuotationController::class,'convert'])->middleware('permission:orders.manage')->name('quotations.convert');
@@ -34,6 +39,14 @@ Route::middleware('installed')->group(function(){
         Route::get('/finance/cash-reconciliation',[CashReconciliationController::class,'index'])->middleware('permission:accounting.view')->name('finance.cash-reconciliation');
         Route::post('/finance/cash-reconciliation',[CashReconciliationController::class,'store'])->middleware('permission:accounting.manage')->name('finance.cash-reconciliation.store');
         Route::post('/finance/cash-reconciliation/adjustment',[CashReconciliationController::class,'storeAdjustment'])->middleware('permission:accounting.manage')->name('finance.cash-reconciliation.adjustment');
+        Route::get('/finance/bank-reconciliation',[BankReconciliationController::class,'index'])->middleware('permission:accounting.view')->name('finance.bank-reconciliation');
+        Route::post('/finance/bank-reconciliation',[BankReconciliationController::class,'store'])->middleware('permission:accounting.manage')->name('finance.bank-reconciliation.store');
+        Route::get('/finance/bank-reconciliation/{reconciliation}',[BankReconciliationController::class,'show'])->middleware('permission:accounting.view')->name('finance.bank-reconciliation.show');
+        Route::get('/finance/bank-reconciliation/{reconciliation}/statement',[BankReconciliationController::class,'downloadStatement'])->middleware('permission:accounting.view')->name('finance.bank-reconciliation.statement');
+        Route::post('/bank-reconciliation-txn/{txn}/create-payment',[BankReconciliationController::class,'createPayment'])->middleware('permission:accounting.manage')->name('bank-txn.create-payment');
+        Route::post('/bank-reconciliation-txn/{txn}/link-payment',[BankReconciliationController::class,'linkPayment'])->middleware('permission:accounting.manage')->name('bank-txn.link-payment');
+        Route::post('/bank-reconciliation-txn/{txn}/create-expense',[BankReconciliationController::class,'createExpense'])->middleware('permission:accounting.manage')->name('bank-txn.create-expense');
+        Route::post('/bank-reconciliation-txn/{txn}/link-expense',[BankReconciliationController::class,'linkExpense'])->middleware('permission:accounting.manage')->name('bank-txn.link-expense');
         Route::get('/finance/vat',[VatReportController::class,'index'])->middleware('permission:reports.financial')->name('vat.index');
         Route::get('/finance/vat/export',[VatReportController::class,'exportCsv'])->middleware('permission:reports.financial')->name('vat.export');
         Route::get('/credit-notes',[CreditNoteController::class,'index'])->middleware('permission:invoices.view')->name('credit-notes.index');

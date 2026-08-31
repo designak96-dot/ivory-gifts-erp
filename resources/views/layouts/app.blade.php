@@ -26,6 +26,7 @@
             @if($u->hasPermission('products.view'))<a @class(['active'=>request()->routeIs('products.*')]) href="{{ route('products.index') }}">@include('partials._nav-icon',['name'=>'products']) Products</a>@endif
             @if($u->hasPermission('inventory.view'))<a @class(['active'=>request()->routeIs('inventory.*')]) href="{{ route('inventory.index') }}">@include('partials._nav-icon',['name'=>'inventory']) Inventory</a>@endif
             @if($u->hasPermission('purchases.view'))<a @class(['active'=>request()->routeIs('purchases.*','suppliers.*')]) href="{{ route('purchases.index') }}">@include('partials._nav-icon',['name'=>'purchases']) Purchases & Suppliers</a>@endif
+            @if($u->hasPermission('purchases.view'))<a @class(['active'=>request()->routeIs('raw-materials.*')]) href="{{ route('raw-materials.index') }}">@include('partials._nav-icon',['name'=>'purchases']) Raw Materials</a>@endif
             <p>Finance</p>
             @if($u->hasPermission('expenses.view'))<a @class(['active'=>request()->routeIs('expenses.*')]) href="{{ route('expenses.index') }}">@include('partials._nav-icon',['name'=>'expenses']) Expenses</a>@endif
             @if($u->hasPermission('accounting.view'))<a @class(['active'=>request()->routeIs('accounting.*')]) href="{{ route('accounting.index') }}">@include('partials._nav-icon',['name'=>'accounting']) Accounting</a>@endif
@@ -33,6 +34,7 @@
             @if($u->hasPermission('accounting.view'))<a @class(['active'=>request()->routeIs('cashflow.index')]) href="{{ route('cashflow.index') }}">@include('partials._nav-icon',['name'=>'accounting']) Cashflow</a>@endif
             @if($u->hasPermission('expenses.view'))<a @class(['active'=>request()->routeIs('finance.budgets')]) href="{{ route('finance.budgets') }}">@include('partials._nav-icon',['name'=>'expenses']) Budgets</a>@endif
             @if($u->hasPermission('accounting.view'))<a @class(['active'=>request()->routeIs('finance.cash-reconciliation')]) href="{{ route('finance.cash-reconciliation') }}">@include('partials._nav-icon',['name'=>'accounting']) Cash Reconciliation</a>@endif
+            @if($u->hasPermission('accounting.view'))<a @class(['active'=>request()->routeIs('finance.bank-reconciliation*')]) href="{{ route('finance.bank-reconciliation') }}">@include('partials._nav-icon',['name'=>'accounting']) Bank Reconciliation</a>@endif
             @if($u->hasPermission('reports.financial'))<a @class(['active'=>request()->routeIs('vat.*')]) href="{{ route('vat.index') }}">@include('partials._nav-icon',['name'=>'accounting']) VAT Report</a>@endif
             @if($u->hasPermission('exports.view'))<a @class(['active'=>request()->routeIs('exports.*')]) href="{{ route('exports.index') }}">@include('partials._nav-icon',['name'=>'import']) Export Center</a>@endif
             @if($u->hasPermission('reports.view'))<a @class(['active'=>request()->routeIs('reports.*')]) href="{{ route('reports.index') }}">@include('partials._nav-icon',['name'=>'reports']) Reports</a>@endif

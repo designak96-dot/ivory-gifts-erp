@@ -16,21 +16,33 @@ class ProofUploadService
 {
     private const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
     private const MAX_BYTES = 8 * 1024 * 1024; // 8MB
+    private const EXTENSION_MAP = [
+        'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'application/pdf' => 'pdf',
+        'text/csv' => 'csv', 'text/plain' => 'csv', 'application/csv' => 'csv', 'application/vnd.ms-excel' => 'xls',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+        'application/zip' => 'xlsx', // some servers report XLSX (a zip container) with this generic mime
+    ];
 
-    /** @return array{proof_path: string, proof_original_name: string, proof_mime: string, proof_size: int} */
-    public function store(UploadedFile $file, string $folder): array
+    /**
+     * @param array|null $allowedMime Optional override of the accepted
+     * mime types, for callers with different needs than the default
+     * proof-image whitelist (e.g. bank statement uploads). Every
+     * existing caller that doesn't pass this keeps the exact original
+     * behavior unchanged.
+     * @return array{proof_path: string, proof_original_name: string, proof_mime: string, proof_size: int}
+     */
+    public function store(UploadedFile $file, string $folder, ?array $allowedMime = null): array
     {
+        $whitelist = $allowedMime ?? self::ALLOWED_MIME;
         $mime = $file->getMimeType();
-        if (!in_array($mime, self::ALLOWED_MIME, true)) {
-            throw new \InvalidArgumentException("Unsupported proof file type ({$mime}). Use JPG, PNG, WEBP, or PDF.");
+        if (!in_array($mime, $whitelist, true)) {
+            throw new \InvalidArgumentException("Unsupported file type ({$mime}). Use ".implode(', ', $whitelist).'.');
         }
         if ($file->getSize() > self::MAX_BYTES) {
-            throw new \InvalidArgumentException('Proof file exceeds the 8MB size limit.');
+            throw new \InvalidArgumentException('File exceeds the 8MB size limit.');
         }
 
-        $extension = match ($mime) {
-            'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'application/pdf' => 'pdf',
-        };
+        $extension = self::EXTENSION_MAP[$mime] ?? strtolower($file->getClientOriginalExtension()) ?: 'bin';
         $storedName = Str::random(24).'.'.$extension;
         $relative = "{$folder}/{$storedName}";
         Storage::disk('local')->putFileAs($folder, $file, $storedName);

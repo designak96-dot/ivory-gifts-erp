@@ -1,78 +1,69 @@
-# Ivory Gifts ERP — Expense Attachments + Cash Reconciliation — 2026-08-31-v46
+# Ivory Gifts ERP — Raw Material Purchase System — 2026-08-31-v48
 
-## 1. Expense Attachments
-Two genuinely separate upload fields in Finance → Expenses:
-- **Expense Invoice / Bill** — optional
-- **Payment Proof / Slip** — required (unchanged from before — this was
-  already required)
+## What's new: a simpler way to buy raw materials
 
-Both accept JPG/JPEG/PNG/WEBP/PDF, support drag-and-drop and click to
-browse, and are stored at completely independent paths — uploading one
-never touches or overwrites the other. Each is viewable and downloadable
-separately from the expense register. Historical expenses (posted before
-this update) are completely unaffected — their existing proof data is
-untouched, and they simply show "Not provided" for the new invoice
-field they never had.
+**Raw Materials** — a genuinely separate entity from Sales Products,
+with its own code, category, unit, stock, reorder level, preferred
+supplier, and latest cost. Nothing about the existing `Products` table
+or Sales module was touched.
 
-**A real pre-existing bug was found and fixed along the way**: the route
-for viewing an expense's proof required `expenses.manage`, but the
-controller itself was written to also allow `expenses.view` — silently
-blocking view-only staff who should have had access. Fixed at the route
-level, with a regression test guarding it.
+**Direct Purchase Entry** — no Draft → Approved → Ordered → Received
+workflow. One form: Supplier, Date, Quantity, Unit, Unit Price, VAT,
+Payment Method, Payment Reference, Notes, Supplier Invoice/Bill. On
+save, in one transaction: stock increases immediately, the material's
+latest cost updates, and the correct accounting entry posts
+automatically — Inventory (1200) debited at the real ex-VAT cost, Input
+VAT (1300) posted separately, and Cash/Bank/Accounts Payable credited
+depending on how it was paid. **No separate Expense entry is ever
+created** — verified by a dedicated test that explicitly checks no
+Expense record exists after a purchase.
 
-## 2. Cash Reconciliation
-New page: **Finance → Cash Reconciliation**.
+**Cash payments** reduce the real Cash account and automatically feed
+Cash Reconciliation, since that feature already reads from the same
+ledger every purchase posts to — no separate integration needed, just
+correct accounting.
 
-Automatically computes **Opening Cash + Cash In − Cash Out = Expected
-Cash Balance** directly from the real double-entry ledger — the same
-source of truth every other financial figure in this app already comes
-from, not a separate, parallel calculation that could drift out of
-sync. This covers cash customer payments and cash expenses (already
-posted to the ledger by existing features) plus supplier cash payments,
-cash refunds, petty cash, and approved adjustments, all recorded through
-one new Adjustment form.
+**Bank payments** reduce the selected bank account and save the Payment
+Reference. This is the part that genuinely required new work: Bank
+Reconciliation's matching engine has been extended so raw material
+purchases are now a real third source alongside Payments and Expenses —
+verified end-to-end that a bank reference on a purchase gets correctly
+matched, and confirmed the existing 15 bank reconciliation tests still
+pass exactly as before.
 
-At reconciliation time, enter the Reconciliation Date, Cash Account, and
-Actual Physical Cash Count. The system shows Expected Cash, Physical
-Cash, and the Difference — with **"Cash difference requires review."**
-displayed whenever they don't match. The reconciliation never
-automatically changes any existing transaction — it only ever records a
-new snapshot.
+**Unpaid purchases** create a real Supplier Payable — found and used the
+`outstanding_payable` field that already existed on the Supplier model
+for exactly this purpose, rather than adding a duplicate one.
 
-Owner/Admin can record an adjustment (Amount, Cash In/Out, Reason, Date,
-optional proof), each one auto-numbered **CR-xxxxx** (Cash Receipt) or
-**CP-xxxxx** (Cash Payment) and posted to the ledger through a dedicated
-clearing account, so it genuinely affects future reconciliations rather
-than just being a note. Full audit trail via creator and timestamps on
-every record.
+**Price History** — Previous, Latest, Lowest, Highest, and % change,
+computed live from actual purchase history (never a separate, driftable
+table), plus a same-material price comparison across every supplier
+who's sold it. Verified with a real 20% price-increase scenario end to
+end, screenshotted against a live page.
 
-**A real bug was caught and fixed during development**: an early version
-of the calculation filtered ledger lines by `status='posted'`, which
-would have excluded a reversed transaction's original lines while still
-counting its reversal — leaving a phantom balance that shouldn't exist.
-Caught by a dedicated test before it shipped; the existing, proven
-pattern from `FinancialSummaryService` (no status filter — both sides of
-a reversal naturally cancel) was used instead.
+## Scope respected
+The existing formal Purchase Order system (Draft/Approved/Ordered/
+Received) is completely untouched — still there for anyone using it.
+This is a new, parallel, simpler path for everyday raw-material buying,
+not a replacement of any existing code, table, or data. No Product,
+Expense, or PurchaseOrder record was modified by this update.
 
 ## Testing
-**484/484 automated tests passing**, including 12 new tests specifically
-covering the reconciliation math (opening balance across month
-boundaries, the reversal-cancellation guard), CR-/CP- reference
-generation, adjustment-to-reconciliation integration (verified an
-adjustment genuinely moves the next computed expected balance, not just
-gets recorded), and permission boundaries. Verified end-to-end with a
-real rendered page showing correct live numbers (Opening 2,000 + Cash In
-800 − Cash Out 350 = Expected 2,450, correctly flagged against a 2,400
-physical count as a real difference). Fresh-install migration confirmed
-clean.
+**516/516 automated tests passing**, including 13 new tests specific to
+this feature covering the accounting postings for all three payment
+methods, price history math, multi-supplier comparison, permission
+boundaries, secure invoice storage, and the bank reconciliation
+extension. Ended with a real rendered screenshot showing correct stock
+accumulation (3 → 33 units across two purchases), correct price change
+percentage, and correct supplier comparison — not just unit-level
+assertions.
 
 ## Install
 ```bash
 cd /home/ivorygif/ivory-accounts
-unzip -o /path/to/ivory-gifts-erp-update-20260831-v46.zip -d .
+unzip -o /path/to/ivory-gifts-erp-update-20260831-v48.zip -d .
 PHP_BIN=/opt/alt/php85/usr/bin/php bash update.sh
 ```
 
 Does not reset the database, run migrate:fresh, touch .env, or
-regenerate APP_KEY. All new database changes are additive; existing
-expense, payment, and accounting records are completely untouched.
+regenerate APP_KEY. All new tables and columns are purely additive.
