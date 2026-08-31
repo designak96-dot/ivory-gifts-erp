@@ -324,7 +324,42 @@ document.addEventListener('DOMContentLoaded', () => {
           const linkRes = await fetch(btn.dataset.linkUrl, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken, Accept: 'application/json' } });
           if (!linkRes.ok) { alert('Could not prepare the WhatsApp message — please try again.'); return; }
           const data = await linkRes.json();
-          const whatsappUrl = 'https://wa.me/' + data.phone + '?text=' + encodeURIComponent(data.message);
+          let message = data.message;
+          if (data.status === 'ready') {
+            const wave = String.fromCodePoint(0x1F44B);
+            const party = String.fromCodePoint(0x1F389);
+            const sparkles = String.fromCodePoint(0x2728);
+            const box = String.fromCodePoint(0x1F4E6);
+            const down = String.fromCodePoint(0x1F447);
+            const heart = String.fromCodePoint(0x1F90D);
+
+            message = [
+              `مرحبا ${data.customer_name} ${wave}`,
+              '',
+              `طلبك جاهز! ${party}${sparkles}`,
+              '',
+              `${box} *الطلب ${data.order_number}*`,
+              '',
+              `يمكنك مشاهدة الفاتورة وتفاصيل الطلب هنا ${down}`,
+              '',
+              `Hi ${data.customer_name} ${wave}`,
+              '',
+              `Your order is ready! ${party}${sparkles}`,
+              '',
+              `${box} *ORDER ${data.order_number}*`,
+              '',
+              `You can view your invoice & order details here ${down}`,
+              '',
+              data.share_url,
+              '',
+              `شكراً لاختيارك لنا ${heart}`,
+              `Thank you for choosing us ${heart}`,
+              '',
+              '*Ivory Gifts*',
+            ].join('\n');
+          }
+
+          const whatsappUrl = 'https://wa.me/' + data.phone + '?text=' + encodeURIComponent(message);
           window.open(whatsappUrl, '_blank');
         };
 

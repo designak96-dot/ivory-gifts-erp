@@ -57,6 +57,9 @@ class WhatsAppShareController extends Controller
         return response()->json([
             'phone' => $phone,
             'message' => $message,
+            'status' => $order->simple_status,
+            'customer_name' => $customer->name,
+            'order_number' => $order->order_number,
             'share_url' => $shareUrl,
         ], 200, ['Content-Type' => 'application/json; charset=UTF-8'], JSON_UNESCAPED_UNICODE);
     }

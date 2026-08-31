@@ -1,0 +1,17 @@
+Ready WhatsApp URL round-trip verification
+
+Base GitHub main: 2515d2937e9894a1ddf7e97d3fac1194679c90ea
+
+Checks:
+- URL text parameter decodes exactly back to the final JS message: PASS
+- encodeURIComponent() used once in the Ready browser handler: PASS
+- Secure link occurs exactly once: PASS
+- U+FFFD replacement character absent: PASS
+- U+1F44B wave survives: PASS
+- U+1F389 party survives: PASS
+- U+2728 sparkles survives: PASS
+- U+1F4E6 package survives: PASS
+- U+1F447 down survives: PASS
+- U+1F90D white heart survives: PASS
+- WhatsApp *bold* markers preserved: PASS
+- Required line breaks preserved: PASS

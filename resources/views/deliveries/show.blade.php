@@ -21,7 +21,7 @@
 @php($order=$delivery->salesOrder)
 <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
 <span class="badge {{ ['pending'=>'amber','ready'=>'blue','delivered'=>'green','canceled'=>'red'][$order->simple_status] ?? 'amber' }}">{{ ucfirst($order->simple_status) }}</span>
-@if(in_array($order->simple_status,['ready','delivered']))<button type="button" class="btn small success" data-whatsapp-share data-check-url="{{ route('whatsapp.check',$order) }}" data-link-url="{{ route('whatsapp.link',$order) }}">💬 WhatsApp</button>@endif
+@if(in_array($order->simple_status,['ready','delivered']))<button type="button" class="btn small success" data-whatsapp-share data-whatsapp-status="{{ $order->simple_status }}" data-check-url="{{ route('whatsapp.check',$order) }}" data-link-url="{{ route('whatsapp.link',$order) }}">💬 WhatsApp</button>@endif
 @include('partials._confirmed-proof-widget',['order'=>$order])
 @if($order->simple_status==='canceled')
 <span class="badge red">Confirmation: N/A</span>

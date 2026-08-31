@@ -1,0 +1,5 @@
+Repository: designak96-dot/ivory-gifts-erp
+Branch: main
+Base commit checked: 2515d2937e9894a1ddf7e97d3fac1194679c90ea
+Checked at: 2026-08-31
+Scope: Ready WhatsApp customer message only
