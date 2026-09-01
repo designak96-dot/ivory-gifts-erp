@@ -36,6 +36,17 @@
 .notif-item small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
 .notif-empty{padding:20px;text-align:center;color:var(--muted);font-size:12.5px}
 .kpi-bad-row{background:rgba(240,85,111,.06)}
+.amount-cell{font-variant-numeric:tabular-nums}
+.amount-cell>div:first-child{font-weight:700;color:var(--text-strong)}
+.amount-cell .badge{font-size:10px;padding:2px 8px}
+.amount-total{font-weight:700;color:var(--text-strong)}
+.amount-breakdown{color:var(--muted);font-size:11px;font-weight:600;margin:4px 0}
+.amount-cell .badge{margin-top:4px}
+.cell-truncate{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default}
+#orders-table td[data-label="Customer"]{white-space:normal}
+#orders-table [data-label="Order"]>div:first-child{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+#orders-table td[data-label="Actions"]{white-space:normal}
+@media(max-width:1400px){#orders-table .row-actions{display:flex;flex-direction:column;align-items:flex-start;gap:5px}}
 .dropzone-inner{border:2px dashed rgba(148,163,204,.35);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
 .dropzone-inner:hover{border-color:rgba(34,211,238,.5)}
 .dropzone-inner.dragover{border-color:#22d3ee;background:rgba(34,211,238,.08)}
