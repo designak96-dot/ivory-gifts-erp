@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{Customer, Expense, Invoice, Payment, Product, PurchaseOrder, SalesOrder};
+use App\Models\{Customer, Expense, Invoice, Payment, Product, SalesOrder};
 use App\Services\ProfitCalculatorService;
 use Illuminate\Http\Request;
 
@@ -72,8 +72,8 @@ class ExportController extends Controller
 
     public function purchases(Request $request)
     {
-        $purchases = PurchaseOrder::with('supplier')->orderByDesc('order_date')->get();
-        return $this->stream('purchases.csv', ['PO Number', 'Supplier', 'Order Date', 'Status', 'Total'], $purchases->map(fn ($p) => [$p->purchase_order_number, $p->supplier->name ?? '', $p->order_date->toDateString(), $p->status, $p->grand_total]));
+        $purchases = \App\Models\RawMaterialPurchase::with('supplier', 'lines.rawMaterial')->orderByDesc('purchase_date')->get();
+        return $this->stream('purchases.csv', ['Purchase Number', 'Supplier', 'Materials', 'Purchase Date', 'Payment Method', 'Total'], $purchases->map(fn ($p) => [$p->purchase_number, $p->supplier->name ?? '', $p->lines->pluck('rawMaterial.name')->filter()->implode(', '), $p->purchase_date->toDateString(), $p->payment_method, $p->total_amount]));
     }
 
     public function profit(Request $request, ProfitCalculatorService $calculator)

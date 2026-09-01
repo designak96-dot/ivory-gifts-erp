@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\{AccountingController,AuditController,AuthController,BackupController,BankReconciliationController,CalendarController,CashflowController,CashReconciliationController,CreditNoteController,CustomerController,DashboardController,DataImportController,DeliveryController,ExpenseBudgetController,ExpenseController,ExportController,FinancialAccountController,GlobalSearchController,ImportExportController,InventoryController,InvoiceController,IvoryAiController,LegacyDeliveryImportController,OrderAttachmentController,OrderCommentController,ProductController,ProductImportController,ProductionController,ProofController,PublicShareController,PurchaseOrderController,QuotationController,RawMaterialController,RecoverySnapshotController,ReportController,SalesOrderController,SavedFilterController,SettingsController,SetupController,ShareLinkController,SupplierController,SyncVersionController,SystemHealthController,TaskController,UserController,VatReportController,WhatsAppShareController};
+use App\Http\Controllers\{AccountingController,AuditController,AuthController,BackupController,BankReconciliationController,CalendarController,CashflowController,CashReconciliationController,CreditNoteController,CustomerController,DashboardController,DataImportController,DeliveryController,ExpenseBudgetController,ExpenseController,ExportController,FinancialAccountController,GlobalSearchController,ImportExportController,InventoryController,InvoiceController,IvoryAiController,LegacyDeliveryImportController,OrderAttachmentController,OrderCommentController,ProductController,ProductImportController,ProductionController,ProofController,PublicShareController,QuotationController,RawMaterialController,RecoverySnapshotController,ReportController,SalesOrderController,SavedFilterController,SettingsController,SetupController,ShareLinkController,SupplierController,SyncVersionController,SystemHealthController,TaskController,UserController,VatReportController,WhatsAppShareController};
 use Illuminate\Support\Facades\Route;
 
 Route::get('/setup', [SetupController::class,'create'])->name('setup.create');
@@ -17,9 +17,10 @@ Route::middleware('installed')->group(function(){
         Route::resource('products',ProductController::class)->except(['show','destroy'])->middleware('permission:products.view');
         Route::resource('suppliers',SupplierController::class)->except(['show','destroy'])->middleware('permission:purchases.view');
         Route::get('/raw-materials',[RawMaterialController::class,'index'])->middleware('permission:purchases.view')->name('raw-materials.index');
+        Route::get('/purchases',[RawMaterialController::class,'index'])->middleware('permission:purchases.view')->name('purchases.index');
         Route::post('/raw-materials',[RawMaterialController::class,'store'])->middleware('permission:purchases.manage')->name('raw-materials.store');
         Route::get('/raw-materials/{material}',[RawMaterialController::class,'show'])->middleware('permission:purchases.view')->name('raw-materials.show');
-        Route::post('/raw-materials/{material}/purchases',[RawMaterialController::class,'storePurchase'])->middleware('permission:purchases.manage')->name('raw-materials.purchases.store');
+        Route::post('/raw-material-purchases',[RawMaterialController::class,'storePurchase'])->middleware('permission:purchases.manage')->name('raw-material-purchases.store');
         Route::get('/raw-material-purchases/{purchase}/invoice',[RawMaterialController::class,'downloadInvoice'])->middleware('permission:purchases.view')->name('raw-material-purchases.invoice');
         Route::resource('quotations',QuotationController::class)->only(['index','create','store','show','edit','update'])->middleware('permission:quotations.view');
         Route::get('/quotations/{quotation}/versions/{version}',[QuotationController::class,'showVersion'])->middleware('permission:quotations.view')->name('quotations.version');
@@ -112,12 +113,6 @@ Route::middleware('installed')->group(function(){
         Route::patch('/deliveries/{delivery}',[DeliveryController::class,'update'])->middleware('permission:deliveries.manage')->name('deliveries.update');
         Route::patch('/deliveries/{delivery}/order-workflow',[DeliveryController::class,'updateOrderWorkflow'])->middleware('permission:deliveries.manage')->name('deliveries.order-workflow');
         Route::patch('/deliveries/{delivery}/quick-update',[DeliveryController::class,'quickUpdate'])->middleware('permission:deliveries.manage')->name('deliveries.quick-update');
-        Route::get('/purchases',[PurchaseOrderController::class,'index'])->middleware('permission:purchases.view')->name('purchases.index');
-        Route::get('/purchases/{purchaseOrder}',[PurchaseOrderController::class,'show'])->middleware('permission:purchases.view')->name('purchases.show');
-        Route::post('/purchases',[PurchaseOrderController::class,'store'])->middleware('permission:purchases.manage')->name('purchases.store');
-        Route::post('/purchases/{purchaseOrder}/approve',[PurchaseOrderController::class,'approve'])->middleware('permission:purchases.manage')->name('purchases.approve');
-        Route::post('/purchases/{purchaseOrder}/mark-ordered',[PurchaseOrderController::class,'markOrdered'])->middleware('permission:purchases.manage')->name('purchases.mark-ordered');
-        Route::post('/purchases/{purchaseOrder}/receive',[PurchaseOrderController::class,'receive'])->middleware('permission:inventory.manage')->name('purchases.receive');
         Route::get('/expenses',[ExpenseController::class,'index'])->middleware('permission:expenses.view')->name('expenses.index');
         Route::post('/expenses',[ExpenseController::class,'store'])->middleware('permission:expenses.manage')->name('expenses.store');
         Route::get('/expenses/{expense}/proof',[ProofController::class,'expense'])->middleware('permission:expenses.view')->name('expenses.proof');

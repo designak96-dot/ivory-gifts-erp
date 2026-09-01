@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{DeliveryNote, ProductionJob, PurchaseOrder, Task};
+use App\Models\{DeliveryNote, ProductionJob, Task};
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -53,14 +53,6 @@ class CalendarController extends Controller
             ->get()
             ->each(function ($t) use ($events) {
                 $events->push(['date' => $t->due_at->toDateString(), 'type' => 'Task', 'color' => 'red', 'label' => $t->title, 'url' => route('tasks.index')]);
-            });
-
-        PurchaseOrder::with('supplier')
-            ->whereBetween('expected_delivery_date', [$start, $end])
-            ->whereNotIn('status', ['received'])
-            ->get()
-            ->each(function ($po) use ($events) {
-                $events->push(['date' => $po->expected_delivery_date->toDateString(), 'type' => 'Expected receipt', 'color' => 'blue', 'label' => $po->purchase_order_number.' · '.($po->supplier->name ?? ''), 'url' => route('purchases.show', $po)]);
             });
 
         $grouped = $events->groupBy('date');

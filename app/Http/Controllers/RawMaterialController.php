@@ -2,21 +2,24 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{RawMaterial, RawMaterialPurchase, Supplier};
+use App\Models\{ChartOfAccount, RawMaterial, RawMaterialPurchase, Supplier};
 use App\Services\{ProofUploadService, RawMaterialPurchaseService};
 use Illuminate\Http\Request;
 
 class RawMaterialController extends Controller
 {
+    /** Unified "Purchases & Suppliers" hub: Suppliers, Raw Materials, Record Purchase, Purchase History, Supplier Price Comparison — nothing else. */
     public function index(Request $request)
     {
-        $q = RawMaterial::with('preferredSupplier')->withCount('purchases');
+        $q = RawMaterial::with('preferredSupplier')->withCount('purchaseLines');
         if ($s = $request->query('q')) {
             $q->where(fn ($x) => $x->where('name', 'like', "%{$s}%")->orWhere('code', 'like', "%{$s}%"));
         }
         return view('raw-materials.index', [
             'materials' => $q->orderBy('name')->paginate(25),
             'suppliers' => Supplier::orderBy('name')->get(),
+            'bankAccounts' => ChartOfAccount::where('account_subtype', 'bank')->where('is_active', true)->get(),
+            'recentPurchases' => RawMaterialPurchase::with('supplier', 'lines.rawMaterial')->latest('purchase_date')->limit(15)->get(),
         ]);
     }
 
@@ -36,30 +39,30 @@ class RawMaterialController extends Controller
     {
         return view('raw-materials.show', [
             'material' => $material->load('preferredSupplier'),
-            'purchases' => $material->purchases()->with('supplier')->latest('purchase_date')->paginate(25),
+            'purchaseLines' => $material->purchaseLines()->with('purchase.supplier')->latest('id')->paginate(25),
             'priceHistory' => $service->priceHistory($material),
-            'suppliers' => Supplier::orderBy('name')->get(),
-            'bankAccounts' => \App\Models\ChartOfAccount::where('account_subtype', 'bank')->where('is_active', true)->get(),
         ]);
     }
 
-    public function storePurchase(Request $request, RawMaterial $material, RawMaterialPurchaseService $service, ProofUploadService $proofs)
+    /** One supplier invoice, multiple material lines — a real header + lines purchase, not one entry per material. */
+    public function storePurchase(Request $request, RawMaterialPurchaseService $service, ProofUploadService $proofs)
     {
         abort_unless(auth()->user()->hasPermission('purchases.manage'), 403);
         $data = $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
             'purchase_date' => 'required|date',
-            'quantity' => 'required|numeric|min:0.001',
-            'unit' => 'required|string|max:30',
-            'unit_price' => 'required|numeric|min:0.0001',
-            'tax_amount' => 'nullable|numeric|min:0',
             'payment_method' => 'required|in:cash,bank,unpaid',
             'bank_account_id' => 'required_if:payment_method,bank|nullable|exists:chart_of_accounts,id',
             'payment_reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
             'invoice' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:8192',
+            'lines' => 'required|array|min:1',
+            'lines.*.raw_material_id' => 'required|exists:raw_materials,id',
+            'lines.*.quantity' => 'required|numeric|min:0.001',
+            'lines.*.unit' => 'required|string|max:30',
+            'lines.*.unit_price' => 'required|numeric|min:0.0001',
+            'lines.*.tax_amount' => 'nullable|numeric|min:0',
         ]);
-        $data['raw_material_id'] = $material->id;
 
         if ($request->hasFile('invoice')) {
             $raw = $proofs->store($request->file('invoice'), 'raw-material-invoices');
@@ -67,7 +70,8 @@ class RawMaterialController extends Controller
         }
 
         $purchase = $service->create($data);
-        return back()->with('success', "Purchase {$purchase->purchase_number} recorded — stock and accounting updated automatically.");
+        $materialCount = count($data['lines']);
+        return redirect()->route('raw-materials.index')->with('success', "Purchase {$purchase->purchase_number} recorded — {$materialCount} material(s) updated, stock and accounting posted automatically.");
     }
 
     public function downloadInvoice(RawMaterialPurchase $purchase)

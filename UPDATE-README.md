@@ -1,69 +1,82 @@
-# Ivory Gifts ERP — Raw Material Purchase System — 2026-08-31-v48
+# Ivory Gifts ERP — PO Removal + Multi-Line Raw Material Purchases — 2026-08-31-v49
 
-## What's new: a simpler way to buy raw materials
+## 1. Old Purchase Order system — removed completely
 
-**Raw Materials** — a genuinely separate entity from Sales Products,
-with its own code, category, unit, stock, reorder level, preferred
-supplier, and latest cost. Nothing about the existing `Products` table
-or Sales module was touched.
+Before deleting anything, a full-codebase dependency audit was run (not
+assumed) and found three real dependents that would have broken
+silently:
+- The Calendar's "expected receipt" event, sourced from PO delivery
+  dates — removed; the new direct-purchase system has no equivalent
+  "awaiting delivery" state since purchases are recorded immediately.
+- The Purchases CSV export — repointed to real `RawMaterialPurchase`
+  data rather than deleted, so the export feature still works.
+- Sales Product edit page's supplier price history, which was built on
+  PO line items — removed, since Sales Products are no longer purchased
+  through any PO mechanism, which also strengthens the Sales
+  Products/Raw Materials separation you asked for.
 
-**Direct Purchase Entry** — no Draft → Approved → Ordered → Received
-workflow. One form: Supplier, Date, Quantity, Unit, Unit Price, VAT,
-Payment Method, Payment Reference, Notes, Supplier Invoice/Bill. On
-save, in one transaction: stock increases immediately, the material's
-latest cost updates, and the correct accounting entry posts
-automatically — Inventory (1200) debited at the real ex-VAT cost, Input
-VAT (1300) posted separately, and Cash/Bank/Accounts Payable credited
-depending on how it was paid. **No separate Expense entry is ever
-created** — verified by a dedicated test that explicitly checks no
-Expense record exists after a purchase.
+All three were fixed first. Then: `PurchaseOrderController`, both
+models, both views, every PO route, and `Supplier::purchaseOrders()`
+were deleted, and `purchase_orders`/`purchase_order_items` are dropped
+via a migration verified clean on a fresh database. Four old test files
+that directly exercised the PO system were removed or had their
+PO-specific assertions cut, keeping the parts still testing valid
+functionality.
 
-**Cash payments** reduce the real Cash account and automatically feed
-Cash Reconciliation, since that feature already reads from the same
-ledger every purchase posts to — no separate integration needed, just
-correct accounting.
+## 2. Raw Material Purchases — now genuinely multi-line
 
-**Bank payments** reduce the selected bank account and save the Payment
-Reference. This is the part that genuinely required new work: Bank
-Reconciliation's matching engine has been extended so raw material
-purchases are now a real third source alongside Payments and Expenses —
-verified end-to-end that a bank reference on a purchase gets correctly
-matched, and confirmed the existing 15 bank reconciliation tests still
-pass exactly as before.
+One supplier invoice can now cover multiple materials in a single
+purchase — a real header + multiple lines, not one purchase per
+material. This was the harder half of this update, and the part most
+likely to matter for your actual data:
 
-**Unpaid purchases** create a real Supplier Payable — found and used the
-`outstanding_payable` field that already existed on the Supplier model
-for exactly this purpose, rather than adding a duplicate one.
+**The upgrade path was proven against real data, not assumed.** A
+standalone test recreated the previous single-line schema, inserted a
+real purchase row exactly as it would exist on your live site, ran the
+conversion migration against it, and confirmed byte-for-byte correct
+output — the new line preserves every original value, the header's
+subtotal is computed correctly, and the old single-line columns are
+cleanly removed. No `doctrine/dbal` package is available in this
+environment, so the migration avoids `renameColumn`/`change()`
+entirely, using only add-column, copy-data, and drop-column — standard
+operations that don't need it.
 
-**Price History** — Previous, Latest, Lowest, Highest, and % change,
-computed live from actual purchase history (never a separate, driftable
-table), plus a same-material price comparison across every supplier
-who's sold it. Verified with a real 20% price-increase scenario end to
-end, screenshotted against a live page.
+On save: stock increases for every line's material, one purchase header
+with multiple lines is saved, supplier/material price history updates,
+latest cost updates, and one consolidated accounting entry posts —
+verified that a 2-material purchase produces exactly one journal entry
+(Inventory debit, VAT debit, Cash/Bank/Payable credit), not one entry
+per line. No separate Expense record is ever created.
 
-## Scope respected
-The existing formal Purchase Order system (Draft/Approved/Ordered/
-Received) is completely untouched — still there for anyone using it.
-This is a new, parallel, simpler path for everyday raw-material buying,
-not a replacement of any existing code, table, or data. No Product,
-Expense, or PurchaseOrder record was modified by this update.
+**Purchases & Suppliers now contains exactly the five things
+requested** — Suppliers, Raw Materials, Record Purchase (a dynamic
+add/remove line-item form), Purchase History, and Supplier Price
+Comparison (per material, on its detail page) — nothing else. Fixing
+this also surfaced and fixed a chain of breakage I traced myself:
+`RawMaterial`'s relation to its purchases pointed at a column that no
+longer existed after the schema change, the bank reconciliation
+matching service still called the old single-argument purchase
+signature, and two more test files had the same stale call — all found
+via direct sweeps of the codebase, not assumed fixed.
 
 ## Testing
-**516/516 automated tests passing**, including 13 new tests specific to
-this feature covering the accounting postings for all three payment
-methods, price history math, multi-supplier comparison, permission
-boundaries, secure invoice storage, and the bank reconciliation
-extension. Ended with a real rendered screenshot showing correct stock
-accumulation (3 → 33 units across two purchases), correct price change
-percentage, and correct supplier comparison — not just unit-level
-assertions.
+**509/509 automated tests passing.** Verified with a real rendered
+screenshot: a genuine two-material purchase (Acrylic Sheet + Vinyl
+Roll) shows as one history row with the correct combined total (AED
+399.00), both materials' stock and latest cost updated correctly, and
+the dynamic purchase form rendering and calculating live. Fresh-install
+migration confirmed clean.
 
 ## Install
 ```bash
 cd /home/ivorygif/ivory-accounts
-unzip -o /path/to/ivory-gifts-erp-update-20260831-v48.zip -d .
+unzip -o /path/to/ivory-gifts-erp-update-20260831-v49.zip -d .
 PHP_BIN=/opt/alt/php85/usr/bin/php bash update.sh
 ```
 
-Does not reset the database, run migrate:fresh, touch .env, or
-regenerate APP_KEY. All new tables and columns are purely additive.
+This update is intentionally destructive in one specific place — the
+old PO tables are dropped, per your explicit "I do not need any old
+Purchase Order history/data" instruction. Every other change in this
+update, including the raw material purchase schema conversion, is
+additive/data-preserving. Does not reset the database, run
+migrate:fresh, touch .env, or regenerate APP_KEY.

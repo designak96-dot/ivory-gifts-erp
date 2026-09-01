@@ -25,8 +25,7 @@
             @if($u->hasPermission('deliveries.view'))<a @class(['active'=>request()->routeIs('deliveries.*')]) href="{{ route('deliveries.index') }}">@include('partials._nav-icon',['name'=>'deliveries']) Deliveries</a>@endif
             @if($u->hasPermission('products.view'))<a @class(['active'=>request()->routeIs('products.*')]) href="{{ route('products.index') }}">@include('partials._nav-icon',['name'=>'products']) Products</a>@endif
             @if($u->hasPermission('inventory.view'))<a @class(['active'=>request()->routeIs('inventory.*')]) href="{{ route('inventory.index') }}">@include('partials._nav-icon',['name'=>'inventory']) Inventory</a>@endif
-            @if($u->hasPermission('purchases.view'))<a @class(['active'=>request()->routeIs('purchases.*','suppliers.*')]) href="{{ route('purchases.index') }}">@include('partials._nav-icon',['name'=>'purchases']) Purchases & Suppliers</a>@endif
-            @if($u->hasPermission('purchases.view'))<a @class(['active'=>request()->routeIs('raw-materials.*')]) href="{{ route('raw-materials.index') }}">@include('partials._nav-icon',['name'=>'purchases']) Raw Materials</a>@endif
+            @if($u->hasPermission('purchases.view'))<a @class(['active'=>request()->routeIs('purchases.*','suppliers.*','raw-materials.*')]) href="{{ route('purchases.index') }}">@include('partials._nav-icon',['name'=>'purchases']) Purchases & Suppliers</a>@endif
             <p>Finance</p>
             @if($u->hasPermission('expenses.view'))<a @class(['active'=>request()->routeIs('expenses.*')]) href="{{ route('expenses.index') }}">@include('partials._nav-icon',['name'=>'expenses']) Expenses</a>@endif
             @if($u->hasPermission('accounting.view'))<a @class(['active'=>request()->routeIs('accounting.*')]) href="{{ route('accounting.index') }}">@include('partials._nav-icon',['name'=>'accounting']) Accounting</a>@endif
@@ -71,6 +70,5 @@
 </div>
 <nav class="mobile-nav"><a href="{{ route('dashboard') }}">Home</a>@if($u->hasPermission('orders.view'))<a href="{{ route('orders.index') }}">Orders</a>@endif @if($u->hasPermission('deliveries.view'))<a href="{{ route('deliveries.index') }}">Delivery</a>@endif<button data-sidebar>More</button></nav>
 <dialog id="proof-viewer" class="quick-dialog"><div class="dialog-head"><h2>Proof</h2><button type="button" class="dialog-close" data-close-dialog>×</button></div><iframe data-proof-viewer-frame src="about:blank" style="width:100%;height:70vh;border:1px solid var(--line);border-radius:9px;background:#0a0e1a" title="Proof document"></iframe></dialog>
-@include('partials._ready-whatsapp-js')
 <script>window.IVORY_SYNC_URL=@json(route('sync.version'));(()=>{const c=document.querySelector('[data-live-clock]');if(!c)return;const t=c.querySelector('[data-live-time]'),d=c.querySelector('[data-live-date]'),tf=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Dubai',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}),df=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Dubai',weekday:'short',day:'2-digit',month:'short',year:'numeric'}),update=()=>{const n=new Date();t.textContent=tf.format(n);d.textContent=df.format(n)+' · UAE time'};update();setInterval(update,1000)})();</script><script src="{{ asset('build/assets/app.js') }}?v={{ @filemtime(public_path('build/assets/app.js')) ?: time() }}" defer></script>@stack('scripts')
 </body></html>
