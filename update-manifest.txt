@@ -1,6 +1,2 @@
-public/build/assets/app.css
-public/build/assets/app.js
-public/build/assets/order-entry.js
-public/build/manifest.json
-resources/css/app.css
+resources/views/layouts/app.blade.php
 resources/views/orders/index.blade.php
