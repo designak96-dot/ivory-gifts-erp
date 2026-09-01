@@ -1,44 +1,66 @@
-# Ivory Gifts ERP — Sales Orders Table Polish — 2026-08-31-v51
+# Ivory Gifts ERP — Finance: Account Transfer — 2026-09-01-v52
 
-## Three fixes from your screenshot feedback
+## What's new
 
-**1. Proof widget now sits below the order number**, on its own line,
-instead of crowding the same line as the order number and badges.
+**Finance → Account Transfer.** Move money between Cash, Bank, and Petty
+Cash accounts (e.g. Cash → Bank deposit AED 1,500) with From Account, To
+Account, Amount, Date, Reference, Notes, and an optional proof/deposit
+slip upload.
 
-**2. Long customer names truncate to one line with an ellipsis**
-instead of wrapping across 2-3 lines and bloating row height — hover
-over a truncated name to see the full name in a tooltip. Verified the
-full name is still in the page markup (CSS truncates the *display*,
-never the data).
+On save it posts a single balanced journal entry — credit the From
+account, debit the To account — through the existing double-entry
+ledger. Because both sides are always asset accounts, this can never
+create income, never create an expense, and never affects profit; it
+only relocates funds already on the books. Same-account transfers are
+rejected. Every transfer gets its own number (`TRF-2026-00001`, ...)
+and a full audit trail (create/update/delete) via the standard
+AuditLog mechanism already used elsewhere in the app.
 
-**3. The Amount column is decluttered.** Previously every row showed
-Total, then a Paid/Remaining line, then a status badge — even when
-Paid/Remaining was pure repetition of what the badge already said (e.g.
-"Unpaid" + "Paid AED 0.00 · Remaining AED 210.00" is the same fact
-twice). Now the Paid/Remaining breakdown only appears for genuinely
-**partially paid** orders, where it's the one case that actually adds
-information. Fully paid and fully unpaid orders show just the total and
-the badge — cleaner, and the numbers that matter are still one glance
-away when they matter.
+**Cash Reconciliation** picks up every transfer automatically — no
+separate calculation, it reads the same ledger lines it always has.
 
-**Verified with a real screenshot** reproducing your exact scenario —
-the same long name, a confirmed order with proof attached, and a
-partially-paid order — confirming all three fixes render correctly
-together, not just in isolation.
+**Bank Reconciliation matching** was extended so a transfer that
+touches a bank account is recognized on the statement (by reference,
+then by amount+date) instead of showing up as an unmatched customer
+payment or supplier expense, which is what would otherwise happen to a
+Cash→Bank deposit or Bank→Cash withdrawal line on a real bank
+statement.
 
 ## Testing
-**516/516 automated tests passing**, including 5 new tests specifically
-guarding these three behaviors — proof widget placement, name
-truncation with tooltip preservation, and each of the three payment
-states (paid/unpaid/partial) rendering the amount cell correctly.
+
+This environment has no `composer`/package-registry access, so the
+project's PHPUnit suite could not be executed here — I want to be
+upfront about that rather than claim a test count I didn't produce.
+What I did verify:
+
+- `php -l` on every changed/new PHP file — no syntax errors.
+- Full cross-check of every DB column referenced in code against the
+  new migration's schema, every route name for collisions, and the
+  route-model-binding parameter names against controller signatures.
+- A standalone PHP simulation of the posting logic itself (not the
+  Laravel app, just the arithmetic): confirms `Cash −1,500 / Bank
+  +1,500`, confirms the entry is balanced, confirms no income/expense
+  account code ever appears in the posted lines, and confirms a
+  zero-amount entry is rejected.
+- Manual read-through of `git diff` for all 13 files — confirmed
+  every change is additive (new `if` branches, new array keys, one new
+  route/nav line each) with no existing line removed or altered, and
+  that the Ready/Delivered WhatsApp implementation is untouched.
+
+Please do one real Cash→Bank transfer on staging (or during a low-
+traffic window) before relying on this in production.
 
 ## Install
+
 ```bash
 cd /home/ivorygif/ivory-accounts
-unzip -o /path/to/ivory-gifts-erp-update-20260831-v51.zip -d .
+unzip -o /path/to/ivory-gifts-erp-update-20260901-v52.zip -d .
 PHP_BIN=/opt/alt/php85/usr/bin/php bash update.sh
 ```
 
-Does not reset the database, run migrate:fresh, touch .env, or
-regenerate APP_KEY. Small, targeted change — only the Sales Orders list
-view and shared CSS were touched.
+Does not reset the database, run `migrate:fresh`, touch `.env`, or
+regenerate `APP_KEY`. Two new, additive migrations only (new
+`account_transfers` table, plus the `TRF-` numbering sequence used by
+existing installs that don't get a fresh seed run). No unrelated ERP
+feature touched — only Finance/Account Transfer, Bank Reconciliation
+matching, and the sidebar nav link.

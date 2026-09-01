@@ -89,7 +89,7 @@ class BankReconciliationController extends Controller
         $unmatchedIn = $reconciliation->transactions()->where('match_status', 'missing_in_erp')->where('amount', '>', 0)->count();
         $unmatchedOut = $reconciliation->transactions()->where('match_status', 'missing_in_erp')->where('amount', '<', 0)->count();
         $missingFromStatement = $matcher->findErpTransactionsMissingFromStatement($reconciliation);
-        $missingCount = $missingFromStatement['payments']->count() + $missingFromStatement['expenses']->count() + $missingFromStatement['raw_material_purchases']->count();
+        $missingCount = $missingFromStatement['payments']->count() + $missingFromStatement['expenses']->count() + $missingFromStatement['raw_material_purchases']->count() + $missingFromStatement['account_transfers']->count();
 
         $status = ($possibleCount === 0 && $unmatchedIn === 0 && $unmatchedOut === 0 && $missingCount === 0 && $reconciliation->transactions()->count() > 0) ? 'reconciled' : 'needs_review';
         $reconciliation->update(['status' => $status, 'matched_count' => $matchedCount, 'unmatched_in_count' => $unmatchedIn, 'unmatched_out_count' => $unmatchedOut, 'missing_count' => $missingCount]);

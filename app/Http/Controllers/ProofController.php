@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AccountTransfer;
 use App\Models\Expense;
 use App\Models\Payment;
 use Illuminate\Support\Facades\Storage;
@@ -34,6 +35,13 @@ class ProofController extends Controller
         abort_unless(auth()->user()->hasPermission('expenses.manage') || auth()->user()->hasPermission('expenses.view'), 403);
         abort_unless($expense->invoice_path, 404, 'This expense has no invoice/bill on file.');
         return $this->stream($expense->invoice_path, $expense->invoice_original_name, $expense->invoice_mime);
+    }
+
+    public function accountTransfer(AccountTransfer $transfer)
+    {
+        abort_unless(auth()->user()->hasPermission('accounting.view'), 403);
+        abort_unless($transfer->proof_path, 404, 'This transfer has no proof on file.');
+        return $this->stream($transfer->proof_path, $transfer->proof_original_name, $transfer->proof_mime);
     }
 
     private function stream(string $path, ?string $originalName, ?string $mime)

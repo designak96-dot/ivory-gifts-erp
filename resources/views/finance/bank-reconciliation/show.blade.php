@@ -56,12 +56,13 @@
 @endforeach
 </tbody></table></div></div>
 
-@if($missingFromStatement['payments']->count() || $missingFromStatement['expenses']->count() || $missingFromStatement['raw_material_purchases']->count())
+@if($missingFromStatement['payments']->count() || $missingFromStatement['expenses']->count() || $missingFromStatement['raw_material_purchases']->count() || $missingFromStatement['account_transfers']->count())
 <div class="card" style="margin-top:18px"><h2>⚠ ERP Transactions Missing From Bank Statement</h2>
 <div class="table-wrap" style="margin-top:15px"><table><thead><tr><th>Type</th><th>Number</th><th>Date</th><th>Amount</th></tr></thead><tbody>
 @foreach($missingFromStatement['payments'] as $p)<tr><td>Payment</td><td>{{ $p->payment_number }}</td><td>{{ $p->payment_date->format('d M Y') }}</td><td class="amount">AED {{ number_format($p->amount,2) }}</td></tr>@endforeach
 @foreach($missingFromStatement['expenses'] as $e)<tr><td>Expense</td><td>{{ $e->expense_number }}</td><td>{{ $e->expense_date->format('d M Y') }}</td><td class="amount">AED {{ number_format($e->total_amount,2) }}</td></tr>@endforeach
 @foreach($missingFromStatement['raw_material_purchases'] as $rmp)<tr><td>Raw Material Purchase</td><td>{{ $rmp->purchase_number }}</td><td>{{ $rmp->purchase_date->format('d M Y') }}</td><td class="amount">AED {{ number_format($rmp->total_amount,2) }}</td></tr>@endforeach
+@foreach($missingFromStatement['account_transfers'] as $t)<tr><td>Account Transfer</td><td>{{ $t->transfer_number }}</td><td>{{ $t->transfer_date->format('d M Y') }}</td><td class="amount">AED {{ number_format($t->amount,2) }}</td></tr>@endforeach
 </tbody></table></div></div>
 @endif
 

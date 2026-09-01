@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\{BankStatementTransaction, Expense, Payment, RawMaterialPurchase};
+use App\Models\{AccountTransfer, BankStatementTransaction, Expense, Payment, RawMaterialPurchase};
 
 /**
  * Matches each parsed bank statement line against real Payment/Expense/
@@ -25,11 +25,15 @@ class BankReconciliationMatchingService
             if ($isMoneyIn) {
                 $payment = Payment::whereNotIn('method', ['cash', 'cod'])->where('reference_number', $txn->bank_reference)->first();
                 if ($payment) { $this->setMatch($txn, 'matched', 'payment', $payment->id); return; }
+                $transferIn = AccountTransfer::whereHas('toAccount', fn ($q) => $q->where('account_subtype', 'bank'))->where('reference', $txn->bank_reference)->first();
+                if ($transferIn) { $this->setMatch($txn, 'matched', 'account_transfer', $transferIn->id); return; }
             } else {
                 $expense = Expense::where('payment_method', 'bank')->where('reference', $txn->bank_reference)->first();
                 if ($expense) { $this->setMatch($txn, 'matched', 'expense', $expense->id); return; }
                 $rmPurchase = RawMaterialPurchase::where('payment_method', 'bank')->where('payment_reference', $txn->bank_reference)->first();
                 if ($rmPurchase) { $this->setMatch($txn, 'matched', 'raw_material_purchase', $rmPurchase->id); return; }
+                $transferOut = AccountTransfer::whereHas('fromAccount', fn ($q) => $q->where('account_subtype', 'bank'))->where('reference', $txn->bank_reference)->first();
+                if ($transferOut) { $this->setMatch($txn, 'matched', 'account_transfer', $transferOut->id); return; }
             }
         }
 
@@ -43,6 +47,13 @@ class BankReconciliationMatchingService
                 ->whereDate('payment_date', '>=', $dateFrom)->whereDate('payment_date', '<=', $dateTo)->first();
             $candidateType = 'payment';
             $candidateDate = $candidate?->payment_date;
+            if (!$candidate) {
+                $candidate = AccountTransfer::whereHas('toAccount', fn ($q) => $q->where('account_subtype', 'bank'))
+                    ->whereBetween('amount', [$absAmount - 0.01, $absAmount + 0.01])
+                    ->whereDate('transfer_date', '>=', $dateFrom)->whereDate('transfer_date', '<=', $dateTo)->first();
+                $candidateType = 'account_transfer';
+                $candidateDate = $candidate?->transfer_date;
+            }
         } else {
             $candidate = Expense::where('payment_method', 'bank')->whereBetween('total_amount', [$absAmount - 0.01, $absAmount + 0.01])
                 ->whereDate('expense_date', '>=', $dateFrom)->whereDate('expense_date', '<=', $dateTo)->first();
@@ -53,6 +64,13 @@ class BankReconciliationMatchingService
                     ->whereDate('purchase_date', '>=', $dateFrom)->whereDate('purchase_date', '<=', $dateTo)->first();
                 $candidateType = 'raw_material_purchase';
                 $candidateDate = $candidate?->purchase_date;
+            }
+            if (!$candidate) {
+                $candidate = AccountTransfer::whereHas('fromAccount', fn ($q) => $q->where('account_subtype', 'bank'))
+                    ->whereBetween('amount', [$absAmount - 0.01, $absAmount + 0.01])
+                    ->whereDate('transfer_date', '>=', $dateFrom)->whereDate('transfer_date', '<=', $dateTo)->first();
+                $candidateType = 'account_transfer';
+                $candidateDate = $candidate?->transfer_date;
             }
         }
 
@@ -106,11 +124,17 @@ class BankReconciliationMatchingService
         $matchedPaymentIds = $reconciliation->transactions()->where('matched_type', 'payment')->pluck('matched_id');
         $matchedExpenseIds = $reconciliation->transactions()->where('matched_type', 'expense')->pluck('matched_id');
         $matchedRmIds = $reconciliation->transactions()->where('matched_type', 'raw_material_purchase')->pluck('matched_id');
+        $matchedTransferIds = $reconciliation->transactions()->where('matched_type', 'account_transfer')->pluck('matched_id');
 
         $missingPayments = Payment::whereNotIn('method', ['cash', 'cod'])->whereDate('payment_date', '>=', $start)->whereDate('payment_date', '<=', $end)->whereNotIn('id', $matchedPaymentIds)->get();
         $missingExpenses = Expense::where('payment_method', 'bank')->whereDate('expense_date', '>=', $start)->whereDate('expense_date', '<=', $end)->whereNotIn('id', $matchedExpenseIds)->get();
         $missingRawMaterialPurchases = RawMaterialPurchase::where('payment_method', 'bank')->whereDate('purchase_date', '>=', $start)->whereDate('purchase_date', '<=', $end)->whereNotIn('id', $matchedRmIds)->get();
+        $missingTransfers = AccountTransfer::where(function ($q) {
+                $q->whereHas('fromAccount', fn ($q2) => $q2->where('account_subtype', 'bank'))
+                    ->orWhereHas('toAccount', fn ($q2) => $q2->where('account_subtype', 'bank'));
+            })
+            ->whereDate('transfer_date', '>=', $start)->whereDate('transfer_date', '<=', $end)->whereNotIn('id', $matchedTransferIds)->get();
 
-        return ['payments' => $missingPayments, 'expenses' => $missingExpenses, 'raw_material_purchases' => $missingRawMaterialPurchases];
+        return ['payments' => $missingPayments, 'expenses' => $missingExpenses, 'raw_material_purchases' => $missingRawMaterialPurchases, 'account_transfers' => $missingTransfers];
     }
 }

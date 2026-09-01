@@ -11,6 +11,7 @@ class BankStatementTransaction extends Model {
         return match ($this->matched_type) {
             'payment' => Payment::find($this->matched_id),
             'expense' => Expense::find($this->matched_id),
+            'account_transfer' => AccountTransfer::find($this->matched_id),
             default => null,
         };
     }
