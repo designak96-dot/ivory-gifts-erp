@@ -7,7 +7,7 @@
 <tr><th>Reference</th><th>Name/Customer</th><th>Action</th></tr>
 @foreach($preview['rows'] as $row)
 <tr>
-<td>{{ $row['source_id'] ?? $row['source_order_number'] ?? '—' }}</td>
+<td>{{ $row['source_id'] ?? $row['source_order_number'] ?? $row['manual_reference'] ?? '—' }}</td>
 <td>{{ $row['name'] ?? $row['customer'] ?? '' }}</td>
 <td><span class="badge {{ $row['action']==='conflict'?'red':($row['action']==='create'?'green':'amber') }}">{{ $row['action'] }}</span></td>
 </tr>

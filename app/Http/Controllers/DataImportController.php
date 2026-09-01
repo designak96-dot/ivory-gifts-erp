@@ -25,7 +25,7 @@ class DataImportController extends Controller
     private function resolveRows(Request $request): array
     {
         $request->validate([
-            'type' => 'required|in:customers,orders',
+            'type' => 'required|in:customers,orders,current_orders',
             'file' => 'required|file|max:20480',
         ]);
         $extension = $request->file('file')->getClientOriginalExtension();
@@ -37,7 +37,11 @@ class DataImportController extends Controller
         $rows = $this->resolveRows($request);
         $type = $request->input('type');
 
-        $preview = $type === 'customers' ? $this->service->previewCustomers($rows) : $this->service->previewOrders($rows);
+        $preview = match ($type) {
+            'customers' => $this->service->previewCustomers($rows),
+            'current_orders' => $this->service->previewCurrentOrders($rows),
+            default => $this->service->previewOrders($rows),
+        };
 
         session(['import_rows' => $rows, 'import_type' => $type]);
 
@@ -60,9 +64,11 @@ class DataImportController extends Controller
         $type = session('import_type');
         abort_unless($rows !== null, 419, 'Preview session expired — please re-upload the file.');
 
-        $import = $type === 'customers'
-            ? $this->service->commitCustomers($rows, auth()->id(), $isDryRun)
-            : $this->service->commitOrders($rows, auth()->id(), $isDryRun, $workflow);
+        $import = match ($type) {
+            'customers' => $this->service->commitCustomers($rows, auth()->id(), $isDryRun),
+            'current_orders' => $this->service->commitCurrentOrders($rows, auth()->id(), $isDryRun, $workflow),
+            default => $this->service->commitOrders($rows, auth()->id(), $isDryRun, $workflow),
+        };
 
         if (!$isDryRun) {
             session()->forget(['import_rows', 'import_type']);
