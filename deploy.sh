@@ -75,7 +75,6 @@ mkdir -p "$PUBLIC_DIR"
 install -m 0644 "$APP_DIR/cpanel-public/index.php" "$PUBLIC_DIR/index.php"
 install -m 0644 "$APP_DIR/cpanel-public/.htaccess" "$PUBLIC_DIR/.htaccess"
 install -m 0644 "$APP_DIR/cpanel-public/robots.txt" "$PUBLIC_DIR/robots.txt"
-install -m 0644 "$APP_DIR/cpanel-public/.user.ini" "$PUBLIC_DIR/.user.ini"
 mkdir -p "$PUBLIC_DIR/build"
 cp -R "$APP_DIR/public/build/." "$PUBLIC_DIR/build/"
 find "$PUBLIC_DIR/build" -type d -exec chmod 0755 {} +

@@ -1,39 +1,60 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
-umask 027
+set -euo pipefail
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PAYLOAD_DIR="$APP_DIR/theme-payload"
-SOURCE_TARGET="$APP_DIR/resources/css/app.css"
-BUILD_TARGET="$APP_DIR/public/build/assets/app.css"
-CPANEL_ACCOUNTS_DIR="$(dirname "$APP_DIR")/public_html/accounts"
-BRIDGE_TARGET="$CPANEL_ACCOUNTS_DIR/build/assets/app.css"
-BACKUP_DIR="$APP_DIR/storage/app/private/backups/theme-$(date +%Y%m%d-%H%M%S)"
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+PAYLOAD="$ROOT/theme-payload"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+BACKUP="$ROOT/storage/app/theme-backups/exact-sites-$STAMP"
 
-SOURCE_PAYLOAD="$PAYLOAD_DIR/resources/css/app.css"
-BUILD_PAYLOAD="$PAYLOAD_DIR/public/build/assets/app.css"
+SOURCE_FILES=(
+  "resources/css/app.css"
+  "resources/static-assets/dashboard.css"
+  "resources/static-assets/delivery.css"
+  "resources/static-assets/order-entry.css"
+  "resources/static-assets/sync.css"
+)
 
-[[ -f "$APP_DIR/artisan" ]] || { echo "Run this from the Ivory Gifts ERP application root." >&2; exit 1; }
-[[ -f "$SOURCE_PAYLOAD" ]] || { echo "Missing theme source payload." >&2; exit 1; }
-[[ -f "$BUILD_PAYLOAD" ]] || { echo "Missing compiled theme payload." >&2; exit 1; }
+BUILD_FILES=(
+  "public/build/assets/app.css"
+  "public/build/assets/dashboard.css"
+  "public/build/assets/delivery.css"
+  "public/build/assets/order-entry.css"
+  "public/build/assets/sync.css"
+)
 
-mkdir -p "$BACKUP_DIR/resources/css" "$BACKUP_DIR/public/build/assets"
-[[ -f "$SOURCE_TARGET" ]] && cp "$SOURCE_TARGET" "$BACKUP_DIR/resources/css/app.css"
-[[ -f "$BUILD_TARGET" ]] && cp "$BUILD_TARGET" "$BACKUP_DIR/public/build/assets/app.css"
-
-mkdir -p "$(dirname "$SOURCE_TARGET")" "$(dirname "$BUILD_TARGET")"
-cp "$SOURCE_PAYLOAD" "$SOURCE_TARGET"
-cp "$BUILD_PAYLOAD" "$BUILD_TARGET"
-chmod 0644 "$SOURCE_TARGET" "$BUILD_TARGET"
-
-if [[ -d "$CPANEL_ACCOUNTS_DIR" ]]; then
-    mkdir -p "$BACKUP_DIR/public_html/accounts/build/assets" "$(dirname "$BRIDGE_TARGET")"
-    [[ -f "$BRIDGE_TARGET" ]] && cp "$BRIDGE_TARGET" "$BACKUP_DIR/public_html/accounts/build/assets/app.css"
-    cp "$BUILD_PAYLOAD" "$BRIDGE_TARGET"
-    chmod 0644 "$BRIDGE_TARGET"
+if [[ ! -d "$ROOT/resources" || ! -d "$ROOT/public" ]]; then
+  echo "Error: unzip and run this file from the Laravel ERP root directory."
+  exit 1
 fi
 
-echo "Ivory Gifts colorful liquid-glass theme installed."
-echo "Dark mode and light mode are included."
-echo "Backup: $BACKUP_DIR"
-echo "No PHP, database, Blade, JavaScript, route, automation, or ERP feature file was changed."
+mkdir -p "$BACKUP"
+
+for relative in "${SOURCE_FILES[@]}" "${BUILD_FILES[@]}"; do
+  if [[ -f "$ROOT/$relative" ]]; then
+    mkdir -p "$BACKUP/$(dirname "$relative")"
+    cp -p "$ROOT/$relative" "$BACKUP/$relative"
+  fi
+done
+
+for relative in "${SOURCE_FILES[@]}" "${BUILD_FILES[@]}"; do
+  mkdir -p "$ROOT/$(dirname "$relative")"
+  cp -p "$PAYLOAD/$relative" "$ROOT/$relative"
+done
+
+ACCOUNT_HOME="$(dirname "$ROOT")"
+PUBLIC_ASSETS="$ACCOUNT_HOME/public_html/accounts/build/assets"
+if [[ -d "$PUBLIC_ASSETS" ]]; then
+  for file in app.css dashboard.css delivery.css order-entry.css sync.css; do
+    if [[ -f "$PUBLIC_ASSETS/$file" ]]; then
+      mkdir -p "$BACKUP/public-html-assets"
+      cp -p "$PUBLIC_ASSETS/$file" "$BACKUP/public-html-assets/$file"
+    fi
+    cp -p "$PAYLOAD/public/build/assets/$file" "$PUBLIC_ASSETS/$file"
+  done
+  echo "Updated cPanel public assets: $PUBLIC_ASSETS"
+fi
+
+echo "Exact Sites liquid-glass theme installed successfully."
+echo "Backup saved to: $BACKUP"
+echo "No PHP, Blade, JavaScript, database, route, automation, or position was changed."
+echo "Hard-refresh the browser with Ctrl+F5."

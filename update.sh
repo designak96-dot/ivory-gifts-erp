@@ -106,7 +106,6 @@ info "Migrations applied (additive only)."
 mkdir -p "$PUBLIC_DIR"
 cp -f "$APP_DIR/cpanel-public/index.php" "$PUBLIC_DIR/index.php" 2>/dev/null || true
 cp -f "$APP_DIR/cpanel-public/.htaccess" "$PUBLIC_DIR/.htaccess" 2>/dev/null || true
-cp -f "$APP_DIR/cpanel-public/.user.ini" "$PUBLIC_DIR/.user.ini" 2>/dev/null || true
 rm -rf "$PUBLIC_DIR/build"
 cp -r "$APP_DIR/public/build" "$PUBLIC_DIR/build"
 [[ -L "$PUBLIC_DIR/storage" ]] || ln -s "$APP_DIR/storage/app/public" "$PUBLIC_DIR/storage"
