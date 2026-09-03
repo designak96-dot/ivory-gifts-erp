@@ -135,6 +135,7 @@ Route::middleware('installed')->group(function(){
         Route::post('/settings/tax',[SettingsController::class,'tax'])->middleware('permission:settings.manage')->name('settings.tax');
         Route::post('/settings/branding',[SettingsController::class,'updateBranding'])->middleware('permission:settings.manage')->name('settings.branding');
         Route::delete('/settings/branding/logo',[SettingsController::class,'removeLogo'])->middleware('permission:settings.manage')->name('settings.branding.logo.remove');
+        Route::post('/settings/reset-to-products-only',[SettingsController::class,'resetToProductsOnly'])->middleware('permission:settings.manage')->name('settings.reset-to-products-only');
         Route::delete('/settings/branding/signature',[SettingsController::class,'removeSignature'])->middleware('permission:settings.manage')->name('settings.branding.signature.remove');
         Route::get('/system/health',SystemHealthController::class)->middleware('permission:system.view')->name('system.health');
         Route::get('/system/audit',[AuditController::class,'index'])->middleware('permission:audit.view')->name('system.audit');

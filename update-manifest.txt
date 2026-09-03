@@ -1,1 +1,8 @@
-app/Services/DataImportService.php
+app/Console/Commands/ResetToProductsOnly.php
+app/Http/Controllers/SettingsController.php
+app/Services/DataResetService.php
+public/build/assets/app.css
+public/build/assets/app.js
+public/build/manifest.json
+resources/views/settings/index.blade.php
+routes/web.php

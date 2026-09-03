@@ -30,4 +30,17 @@
 <form id="remove-logo-form" method="post" action="{{ route('settings.branding.logo.remove') }}">@csrf @method('delete')</form>
 <form id="remove-signature-form" method="post" action="{{ route('settings.branding.signature.remove') }}">@csrf @method('delete')</form>
 
-<div><form method="post" action="{{ route('settings.tax') }}" class="card">@csrf<h2>Tax rates</h2><div class="form-grid" style="margin-top:15px"><label>Name<input name="name" required></label><label>Rate %<input type="number" step=".0001" min="0" max="100" name="rate" required></label><label class="check"><input type="checkbox" name="is_inclusive" value="1"> Inclusive</label><input type="hidden" name="is_active" value="1"></div><div class="actions"><button class="btn">Add tax rate</button></div><div class="table-wrap"><table><tbody>@foreach($taxRates as $t)<tr><td>{{ $t->name }}</td><td>{{ $t->rate }}%</td><td><span class="badge {{ $t->is_active?'green':'red' }}">{{ $t->is_active?'Active':'Inactive' }}</span></td></tr>@endforeach</tbody></table></div></form><div class="card" style="margin-top:18px"><h2>Numbering sequences</h2><div class="table-wrap" style="margin-top:15px"><table><thead><tr><th>Document</th><th>Prefix</th><th>Current</th><th>Reset</th></tr></thead><tbody>@foreach($sequences as $s)<tr><td>{{ str_replace('_',' ',$s->document_type) }}</td><td>{{ $s->prefix }}</td><td>{{ $s->current_value }}</td><td>{{ $s->reset_policy }}</td></tr>@endforeach</tbody></table></div></div></div></div>@endsection
+<div><form method="post" action="{{ route('settings.tax') }}" class="card">@csrf<h2>Tax rates</h2><div class="form-grid" style="margin-top:15px"><label>Name<input name="name" required></label><label>Rate %<input type="number" step=".0001" min="0" max="100" name="rate" required></label><label class="check"><input type="checkbox" name="is_inclusive" value="1"> Inclusive</label><input type="hidden" name="is_active" value="1"></div><div class="actions"><button class="btn">Add tax rate</button></div><div class="table-wrap"><table><tbody>@foreach($taxRates as $t)<tr><td>{{ $t->name }}</td><td>{{ $t->rate }}%</td><td><span class="badge {{ $t->is_active?'green':'red' }}">{{ $t->is_active?'Active':'Inactive' }}</span></td></tr>@endforeach</tbody></table></div></form><div class="card" style="margin-top:18px"><h2>Numbering sequences</h2><div class="table-wrap" style="margin-top:15px"><table><thead><tr><th>Document</th><th>Prefix</th><th>Current</th><th>Reset</th></tr></thead><tbody>@foreach($sequences as $s)<tr><td>{{ str_replace('_',' ',$s->document_type) }}</td><td>{{ $s->prefix }}</td><td>{{ $s->current_value }}</td><td>{{ $s->reset_policy }}</td></tr>@endforeach</tbody></table></div></div>
+
+@if(auth()->user()->hasRole('owner'))
+<div class="card" style="margin-top:18px;border-color:var(--red)">
+<h2 style="color:var(--red)">Danger Zone — Reset All Trial Data</h2>
+<p class="muted" style="margin-top:8px">Permanently deletes every customer, sales order, quotation, invoice, payment, expense, the entire general ledger, audit log, and all other trial records. <b>Sales Products, categories, tax rates, and your account are kept.</b> This cannot be undone.</p>
+<form method="post" action="{{ route('settings.reset-to-products-only') }}" style="margin-top:15px" onsubmit="return confirm('This will permanently delete all trial data except Sales Products. Are you absolutely sure?');">
+@csrf
+<label>Type <code>DELETE ALL DATA</code> to confirm<input name="confirmation" required placeholder="DELETE ALL DATA" autocomplete="off"></label>
+<div class="actions"><button class="btn danger">Reset All Data — Keep Only Products</button></div>
+</form>
+</div>
+@endif
+</div></div>@endsection

@@ -13,6 +13,21 @@ class SettingsController extends Controller
 
     public function tax(Request $r){$d=$r->validate(['name'=>'required|string|max:80','rate'=>'required|numeric|min:0|max:100','is_inclusive'=>'nullable|boolean','is_active'=>'nullable|boolean']);TaxRate::create($d);return back()->with('success','Tax rate added.');}
 
+    /** Owner-only, destructive. Requires typing the exact confirmation phrase — a checkbox or single click is too easy to trigger by accident for something this irreversible. */
+    public function resetToProductsOnly(Request $r, \App\Services\DataResetService $resetService)
+    {
+        abort_unless($r->user()->hasRole('owner'), 403, 'Only the account owner can reset all data.');
+        $r->validate(['confirmation' => 'required|string']);
+        if ($r->input('confirmation') !== 'DELETE ALL DATA') {
+            return back()->withErrors(['confirmation' => 'You must type exactly: DELETE ALL DATA'])->withInput();
+        }
+
+        $productCountBefore = \App\Models\Product::count();
+        $result = $resetService->resetToProductsOnly($r->user()->id);
+
+        return back()->with('success', "All trial data cleared. {$result['products_preserved']} products preserved (unchanged from {$productCountBefore}).");
+    }
+
     /**
      * Company branding and document settings — Owner-only (enforced by the
      * settings.manage permission on the route, same as every other method
