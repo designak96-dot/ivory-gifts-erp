@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\{AccountingController,AccountTransferController,AuditController,AuthController,BackupController,BankReconciliationController,CalendarController,CashflowController,CashReconciliationController,CreditNoteController,CustomerController,DashboardController,DataImportController,DeliveryController,ExpenseBudgetController,ExpenseController,ExportController,FinancialAccountController,GlobalSearchController,ImportExportController,InventoryController,InvoiceController,IvoryAiController,LegacyDeliveryImportController,OrderAttachmentController,OrderCommentController,ProductController,ProductImportController,ProductionController,ProofController,PublicShareController,QuotationController,RawMaterialController,RecoverySnapshotController,ReportController,SalesOrderController,SavedFilterController,SettingsController,SetupController,ShareLinkController,SupplierController,SyncVersionController,SystemHealthController,TaskController,UserController,VatReportController,WhatsAppShareController};
+use App\Http\Controllers\{AccountingController,AccountTransferController,AuditController,AuthController,BackupController,BankReconciliationController,CalendarController,CashflowController,CashReconciliationController,CreditNoteController,CustomerController,DashboardController,DataImportController,DeliveryController,ExpenseBudgetController,ExpenseController,ExportController,FinanceMigrationImportController,FinancialAccountController,GlobalSearchController,ImportExportController,InventoryController,InvoiceController,IvoryAiController,LegacyDeliveryImportController,OrderAttachmentController,OrderCommentController,PayrollController,ProductController,ProductImportController,ProductionController,ProofController,PublicShareController,QuotationController,RawMaterialController,RecoverySnapshotController,ReportController,SalesOrderController,SavedFilterController,SettingsController,SetupController,ShareLinkController,StaffAttendanceController,StaffController,StaffGratuityController,StaffLeaveController,StaffOvertimeController,StaffTicketController,SupplierController,SyncVersionController,SystemHealthController,TaskController,UserController,VatReportController,WhatsAppShareController};
 use Illuminate\Support\Facades\Route;
 
 Route::get('/setup', [SetupController::class,'create'])->name('setup.create');
@@ -155,6 +155,42 @@ Route::middleware('installed')->group(function(){
         Route::post('/imports/dry-run',[DataImportController::class,'dryRun'])->middleware('permission:imports.manage')->name('imports.dry-run');
         Route::post('/imports/commit',[DataImportController::class,'commit'])->middleware('permission:imports.manage')->name('imports.commit');
         Route::get('/imports/history',[DataImportController::class,'history'])->middleware('permission:imports.manage')->name('imports.history');
+        Route::get('/imports/template/{type}',[DataImportController::class,'template'])->middleware('permission:imports.manage')->name('imports.template');
+        Route::get('/imports/finance',[FinanceMigrationImportController::class,'create'])->middleware('permission:imports.manage')->name('imports.finance.create');
+        Route::post('/imports/finance/preview',[FinanceMigrationImportController::class,'preview'])->middleware('permission:imports.manage')->name('imports.finance.preview');
+        Route::post('/imports/finance/dry-run',[FinanceMigrationImportController::class,'dryRun'])->middleware('permission:imports.manage')->name('imports.finance.dry-run');
+        Route::post('/imports/finance/commit',[FinanceMigrationImportController::class,'commit'])->middleware('permission:imports.manage')->name('imports.finance.commit');
+        Route::get('/imports/finance/template/{type}',[FinanceMigrationImportController::class,'template'])->middleware('permission:imports.manage')->name('imports.finance.template');
+
+        // Staff & Payroll module
+        Route::get('/staff',[StaffController::class,'index'])->middleware('permission:staff.view')->name('staff.index');
+        Route::get('/staff/create',[StaffController::class,'create'])->middleware('permission:staff.create')->name('staff.create');
+        Route::post('/staff',[StaffController::class,'store'])->middleware('permission:staff.create')->name('staff.store');
+        Route::get('/staff/{staff}',[StaffController::class,'show'])->middleware('permission:staff.view')->name('staff.show');
+        Route::get('/staff/{staff}/edit',[StaffController::class,'edit'])->middleware('permission:staff.edit')->name('staff.edit');
+        Route::put('/staff/{staff}',[StaffController::class,'update'])->middleware('permission:staff.edit')->name('staff.update');
+        Route::post('/staff/{staff}/documents',[StaffController::class,'uploadDocument'])->middleware('permission:staff.edit')->name('staff.documents.store');
+        Route::get('/staff-documents/{document}',[StaffController::class,'downloadDocument'])->middleware('permission:staff.view')->name('staff.documents.download');
+
+        Route::get('/payroll',[PayrollController::class,'index'])->middleware('permission:payroll.manage')->name('payroll.index');
+        Route::post('/payroll/{staff}',[PayrollController::class,'store'])->middleware('permission:payroll.pay')->name('payroll.store');
+        Route::post('/payroll-payments/{payrollPayment}/cancel',[PayrollController::class,'cancel'])->middleware('permission:payroll.cancel')->name('payroll.cancel');
+        Route::post('/payroll-payments/{payrollPayment}/link-expense',[PayrollController::class,'linkExpense'])->middleware('permission:payroll.manage')->name('payroll.link-expense');
+
+        Route::post('/staff/{staff}/overtime',[StaffOvertimeController::class,'store'])->middleware('permission:payroll.manage')->name('staff.overtime.store');
+        Route::post('/staff-overtime/{overtime}/status',[StaffOvertimeController::class,'setStatus'])->middleware('permission:staff.overtime.approve')->name('staff.overtime.status');
+
+        Route::post('/staff/{staff}/attendance',[StaffAttendanceController::class,'store'])->middleware('permission:staff.attendance.manage')->name('staff.attendance.store');
+
+        Route::post('/staff/{staff}/leaves',[StaffLeaveController::class,'store'])->middleware('permission:staff.leave.manage')->name('staff.leaves.store');
+        Route::post('/staff-leaves/{leave}/status',[StaffLeaveController::class,'setStatus'])->middleware('permission:staff.leave.manage')->name('staff.leaves.status');
+
+        Route::post('/staff/{staff}/tickets',[StaffTicketController::class,'store'])->middleware('permission:staff.tickets.manage')->name('staff.tickets.store');
+        Route::post('/staff-tickets/{ticket}/pay',[StaffTicketController::class,'pay'])->middleware('permission:staff.tickets.manage')->name('staff.tickets.pay');
+
+        Route::post('/staff/{staff}/gratuity',[StaffGratuityController::class,'store'])->middleware('permission:staff.gratuity.view')->name('staff.gratuity.store');
+        Route::post('/staff-gratuity/{gratuity}/approve',[StaffGratuityController::class,'approve'])->middleware('permission:staff.gratuity.approve')->name('staff.gratuity.approve');
+        Route::post('/staff-gratuity/{gratuity}/pay',[StaffGratuityController::class,'pay'])->middleware('permission:staff.gratuity.approve')->name('staff.gratuity.pay');
         Route::get('/imports/{import}/errors',[DataImportController::class,'errorReport'])->middleware('permission:imports.manage')->name('imports.errors');
         Route::get('/system/export/{type}',[ImportExportController::class,'export'])->middleware('permission:exports.view')->name('system.export');
         Route::get('/system/recovery-snapshot',RecoverySnapshotController::class)->middleware('permission:exports.view')->name('system.snapshot');

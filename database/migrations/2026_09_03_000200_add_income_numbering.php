@@ -1,0 +1,21 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $now = now();
+        DB::table('numbering_sequences')->updateOrInsert(
+            ['document_type' => 'income_record'],
+            ['prefix' => 'INC-{YYYY}-', 'reset_policy' => 'yearly', 'padding' => 5, 'current_value' => 0, 'year' => $now->year, 'month' => $now->month, 'created_at' => $now, 'updated_at' => $now]
+        );
+    }
+
+    public function down(): void
+    {
+        // Non-destructive, matching this project's established convention.
+    }
+};

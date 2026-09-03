@@ -26,6 +26,8 @@
             @if($u->hasPermission('products.view'))<a @class(['active'=>request()->routeIs('products.*')]) href="{{ route('products.index') }}">@include('partials._nav-icon',['name'=>'products']) Products</a>@endif
             @if($u->hasPermission('inventory.view'))<a @class(['active'=>request()->routeIs('inventory.*')]) href="{{ route('inventory.index') }}">@include('partials._nav-icon',['name'=>'inventory']) Inventory</a>@endif
             @if($u->hasPermission('purchases.view'))<a @class(['active'=>request()->routeIs('purchases.*','suppliers.*','raw-materials.*')]) href="{{ route('purchases.index') }}">@include('partials._nav-icon',['name'=>'purchases']) Purchases & Suppliers</a>@endif
+            @if($u->hasPermission('staff.view'))<a @class(['active'=>request()->routeIs('staff.*')]) href="{{ route('staff.index') }}">@include('partials._nav-icon',['name'=>'purchases']) Staff</a>@endif
+            @if($u->hasPermission('payroll.manage'))<a @class(['active'=>request()->routeIs('payroll.*')]) href="{{ route('payroll.index') }}">@include('partials._nav-icon',['name'=>'purchases']) Payroll</a>@endif
             <p>Finance</p>
             @if($u->hasPermission('expenses.view'))<a @class(['active'=>request()->routeIs('expenses.*')]) href="{{ route('expenses.index') }}">@include('partials._nav-icon',['name'=>'expenses']) Expenses</a>@endif
             @if($u->hasPermission('accounting.view'))<a @class(['active'=>request()->routeIs('accounting.*')]) href="{{ route('accounting.index') }}">@include('partials._nav-icon',['name'=>'accounting']) Accounting</a>@endif
@@ -45,7 +47,8 @@
             @if($u->hasPermission('settings.manage'))<a @class(['active'=>request()->routeIs('settings.*')]) href="{{ route('settings.index') }}">@include('partials._nav-icon',['name'=>'settings']) Settings</a>@endif
             @if($u->hasPermission('audit.view'))<a @class(['active'=>request()->routeIs('system.audit')]) href="{{ route('system.audit') }}">@include('partials._nav-icon',['name'=>'audit']) Audit Log</a>@endif
             @if($u->hasPermission('system.view'))<a @class(['active'=>request()->routeIs('system.health','system.import-export','backups.*')]) href="{{ route('system.health') }}">@include('partials._nav-icon',['name'=>'system']) System</a>@endif
-            @if($u->hasPermission('imports.manage'))<a @class(['active'=>request()->routeIs('imports.*')]) href="{{ route('imports.create') }}">@include('partials._nav-icon',['name'=>'import']) Import Customers/Orders</a>@endif
+            @if($u->hasPermission('imports.manage'))<a @class(['active'=>request()->routeIs('imports.create','imports.preview','imports.history')]) href="{{ route('imports.create') }}">@include('partials._nav-icon',['name'=>'import']) Import Customers/Orders</a>@endif
+            @if($u->hasPermission('imports.manage'))<a @class(['active'=>request()->routeIs('imports.finance.*')]) href="{{ route('imports.finance.create') }}">@include('partials._nav-icon',['name'=>'import']) Finance Migration Import</a>@endif
             @if($u->hasPermission('imports.manage'))<a @class(['active'=>request()->routeIs('products.import.*')]) href="{{ route('products.import.create') }}">@include('partials._nav-icon',['name'=>'import']) Import Products</a>@endif
         </nav>
         <div class="sidebar-user"><span class="sidebar-user-avatar">{{ collect(explode(' ',$u->name))->map(fn($p)=>mb_substr($p,0,1))->take(2)->join('') }}</span><span><b>{{ $u->name }}</b><small>{{ $u->roles->first()?->label ?? 'Team member' }}</small></span></div>
