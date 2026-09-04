@@ -67,6 +67,25 @@ class FinanceMigrationImportService
         return strtolower(trim(preg_replace('/\s+/', ' ', $name)));
     }
 
+    /** A CSV-parsed empty cell is an empty string, not null — treat it the same as genuinely missing, never as an explicit zero. */
+    private function readOptionalFloat($value): ?float
+    {
+        if ($value === null) return null;
+        $trimmed = trim((string) $value);
+        return $trimmed === '' ? null : (float) $trimmed;
+    }
+
+    /** Same empty-string-vs-null distinction for text fields — an empty payee cell must fall through to the supplier column, not "win" with a blank value. */
+    private function readOptionalString(...$candidates): ?string
+    {
+        foreach ($candidates as $candidate) {
+            if ($candidate !== null && trim((string) $candidate) !== '') {
+                return trim((string) $candidate);
+            }
+        }
+        return null;
+    }
+
     private function findOrCreateSupplier(string $rawName): Supplier
     {
         $normalized = self::normalizeSupplierName($rawName);
@@ -128,7 +147,7 @@ class FinanceMigrationImportService
         foreach ($rows as $i => $row) {
             $category = trim((string) ($row['expense_category'] ?? $row['category'] ?? ''));
             $amount = $row['amount'] ?? null;
-            $totalTax = isset($row['total_amount + tax']) ? (float) $row['total_amount + tax'] : (isset($row['total_amount_tax']) ? (float) $row['total_amount_tax'] : null);
+            $totalTax = $this->readOptionalFloat($row['total_amount + tax'] ?? $row['total_amount_tax'] ?? null);
 
             if ($amount === null || $amount === '') {
                 $fatalErrors[] = "Row ".($i + 1).": missing Amount.";
@@ -309,7 +328,7 @@ class FinanceMigrationImportService
                 }
 
                 DB::transaction(function () use ($row, $category, $paymentMethodMap, $import, &$created) {
-                    $totalTax = isset($row['total_amount + tax']) ? (float) $row['total_amount + tax'] : (isset($row['total_amount_tax']) ? (float) $row['total_amount_tax'] : null);
+                    $totalTax = $this->readOptionalFloat($row['total_amount + tax'] ?? $row['total_amount_tax'] ?? null);
                     $isSalary = $this->categoryMatches($category, self::SALARY_CATEGORY_ALIASES);
                     $isRent = $this->categoryMatches($category, self::RENT_CATEGORY_ALIASES);
                     // Salaries never carry VAT, regardless of the source figures.
@@ -318,7 +337,7 @@ class FinanceMigrationImportService
                         : $this->reconcileAmounts((float) $row['amount'], $totalTax);
 
                     $date = !empty($row['date']) ? \Carbon\Carbon::parse($row['date']) : now();
-                    $payee = trim((string) ($row['payee'] ?? $row['supplier'] ?? ''));
+                    $payee = $this->readOptionalString($row['payee'] ?? null, $row['supplier'] ?? null) ?? '';
                     $description = trim((string) ($row['description'] ?? $category));
                     $paymentMethod = $this->resolvePaymentMethod($row['payment method'] ?? $row['payment_method'] ?? null, $paymentMethodMap);
                     $proofMissing = empty($row['proof']) && empty($row['proof_path']);
@@ -375,7 +394,7 @@ class FinanceMigrationImportService
                 }
 
                 DB::transaction(function () use ($row, $incomeCategory, $paymentMethodMap, $import, &$created) {
-                    $totalTax = isset($row['total_amount + tax']) ? (float) $row['total_amount + tax'] : (isset($row['total_amount_tax']) ? (float) $row['total_amount_tax'] : null);
+                    $totalTax = $this->readOptionalFloat($row['total_amount + tax'] ?? $row['total_amount_tax'] ?? null);
                     $reconciled = $this->reconcileAmounts((float) $row['amount'], $totalTax);
                     $date = !empty($row['date']) ? \Carbon\Carbon::parse($row['date']) : now();
                     $paymentMethod = $this->resolvePaymentMethod($row['payment method'] ?? $row['payment_method'] ?? null, $paymentMethodMap);

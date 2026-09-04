@@ -11,9 +11,7 @@ class FinanceMigrationImportController extends Controller
 {
     private const TYPES = [
         'material_purchases' => 'Material Purchases',
-        'general_expenses' => 'General Expenses',
-        'salaries' => 'Salaries',
-        'rent_expenses' => 'Rent Expenses',
+        'expenses' => 'Expenses (General, Salaries, Rent — auto-detected by category)',
         'other_income' => 'Other Income',
         'ivory_delivery_income' => 'Ivory Delivery Income',
         'ifast_delivery_income' => 'iFast Delivery Income',
@@ -85,7 +83,7 @@ class FinanceMigrationImportController extends Controller
 
         $import = match ($type) {
             'material_purchases' => $this->service->commitMaterialPurchases($rows, auth()->id(), $isDryRun, $paymentMap),
-            'general_expenses', 'salaries', 'rent_expenses' => $this->service->commitExpenses($rows, auth()->id(), $isDryRun, $paymentMap),
+            'expenses' => $this->service->commitExpenses($rows, auth()->id(), $isDryRun, $paymentMap),
             'other_income' => $this->service->commitIncome($rows, auth()->id(), $isDryRun, 'other', $paymentMap),
             'ivory_delivery_income' => $this->service->commitIncome($rows, auth()->id(), $isDryRun, 'ivory_delivery', $paymentMap),
             'ifast_delivery_income' => $this->service->commitIncome($rows, auth()->id(), $isDryRun, 'ifast_delivery', $paymentMap),
@@ -112,17 +110,13 @@ class FinanceMigrationImportController extends Controller
                     ['2025-06-01', 'Material Purchases - Ivory Gifts (COGS)', 'INV-145622', 'Acrylic Sheet', '5', '150', '157.50', 'Blue Rhine', 'bank'],
                 ],
             ],
-            'general_expenses' => [
-                'headers' => ['date', 'expense_category', 'invoice no', 'description', 'amount', 'total_amount + tax', 'supplier', 'payment method'],
-                'rows' => [['2025-06-01', 'Office Expense', 'INV-9001', 'Office supplies', '150', '157.50', 'Amazon', 'card']],
-            ],
-            'salaries' => [
-                'headers' => ['date', 'expense_category', 'description', 'payee', 'amount', 'payment method'],
-                'rows' => [['2025-06-30', 'Salaries', 'June salary', 'Ahmed Ali', '3000', 'bank']],
-            ],
-            'rent_expenses' => [
-                'headers' => ['date', 'expense_category', 'description', 'payee', 'amount', 'payment method'],
-                'rows' => [['2025-06-01', 'Rent Expense', 'Office rent June', 'ABC Properties', '5000', 'bank']],
+            'expenses' => [
+                'headers' => ['date', 'expense_category', 'invoice no', 'description', 'payee', 'amount', 'total_amount + tax', 'supplier', 'payment method'],
+                'rows' => [
+                    ['2025-06-01', 'Office Expense', 'INV-9001', 'Office supplies', '', '150', '157.50', 'Amazon', 'card'],
+                    ['2025-06-30', 'Salaries', '', 'June salary', 'Ahmed Ali', '3000', '', '', 'bank'],
+                    ['2025-06-01', 'Rent Expense', '', 'Office rent June', 'ABC Properties', '5000', '', '', 'bank'],
+                ],
             ],
             'other_income' => [
                 'headers' => ['date', 'description', 'customer', 'amount', 'total_amount + tax', 'remarks', 'payment method'],
