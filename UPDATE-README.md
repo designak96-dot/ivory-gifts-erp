@@ -1,70 +1,64 @@
-# Ivory Gifts ERP — Consolidate Expense Import Types + Real Bug Fixes — 2026-09-04-v61
+# Ivory Gifts ERP — Consolidated Delivery Finance Hub + Real Automation Fix — 2026-09-05-v63
 
-## Your question was right
+## Two real things fixed here, not one
 
-You asked why General Expenses, Salaries, and Rent Expenses were three
-separate templates if they "all go to Expenses" — I checked the actual
-code, and you were correct: all three already call the exact same
-method, which auto-detects which one a row is purely from the category
-text you put in it. There was no real reason for three separate
-templates.
+### 1. The automation you asked about wasn't actually wired up
 
-**Consolidated into one "Expenses (General, Salaries, Rent)" type** —
-5 templates instead of 7 now. Material Purchases and the three Income
-types stay separate, since those genuinely land in different tables
-(Purchases, Income — not Expenses at all).
+I built and tested the driver-fee and daily-allowance logic in v62, but
+checking the actual delivery-completion flow (`DeliveryController::update()`)
+showed it was **never called** when a delivery is genuinely marked
+Delivered through the normal screen — only when the service method was
+called directly, which my own tests did, but the real app never did.
+This is exactly what you'd have experienced as "the automation isn't
+working."
 
-## Two real, serious bugs found while building this fix
+**Fixed**: marking an Own Company delivery as Delivered now
+automatically applies the AED 10 driver fee and the shared daily AED 5
+allowance, inside the same save — not a separate step to remember.
+Reverting a delivery away from Delivered (failed/cancelled) correctly
+removes the fee and recalculates the day's allowance too, rather than
+leaving a stale fee behind.
 
-Testing the consolidated template against real data (not just assuming
-it would work) surfaced two bugs that were already present before this
-change — this consolidation just happened to be what finally exercised
-them:
+Verified with three new tests that go through the **real endpoint**,
+not the service directly: marking one delivery delivered applies AED
+10 + AED 5 automatically; five real completions in one day still
+produce exactly one AED 5 allowance split five ways; reverting a
+delivery's status correctly removes what was auto-applied.
 
-1. **A payee that falls back to supplier was silently broken.** When a
-   CSV cell is left blank, it parses as an empty string, not `null`.
-   The code used `$row['payee'] ?? $row['supplier']`, and `??` doesn't
-   trigger on an empty string — so a blank `payee` column never fell
-   through to `supplier` as intended, quietly leaving the payee blank.
+### 2. Too many separate nav items — consolidated into one
 
-2. **Far more serious**: the same empty-string issue in the VAT
-   reconciliation logic meant a blank `total_amount + tax` cell was
-   read as `0.0` (an explicit zero) instead of "not provided". For a
-   real AED 5,000 rent payment with that column left blank, this
-   computed VAT as **-5,000** and the total as **AED 0** — a
-   real payment would have been recorded as worthless. Caught by
-   directly printing what the import actually produced, not by
-   trusting the code.
+**Courier Bills, Driver Settlements, Vehicle Expenses, and Delivery
+Finance Settings are now one "Delivery Finance" page with tabs**,
+instead of four separate sidebar links. Same underlying features, same
+routes still work if you have them bookmarked — just one entry point
+instead of four.
 
-Both fixed with a shared helper that correctly treats an empty CSV cell
-the same as a genuinely missing one — verified with real, printed
-output showing the exact before/after: Rent Expense went from
-`amount=0 tax=-5000` to the correct `amount=5000 tax=0`.
+### Drivers & Vehicles — the part that was missing entirely
 
-I also checked `DataImportService.php` (orders import) for the same
-pattern, since it's the same class of bug — that one already has the
-correct empty-string handling, so no fix was needed there.
+New **"Drivers & Vehicles" tab** on that same page. Adding a driver was
+previously a multi-step trip through Users & Roles (create user, assign
+role, etc.) — now it's name + phone, one button, done, and the new
+driver is immediately available in every delivery-assignment dropdown.
+Vehicles work the same way. Verified directly: a driver added through
+this quick form already has the correct role attached and shows up
+immediately.
 
 ## Testing
-**102/102 of my new and touched tests passing** (2 new this round),
-including a test that imports one combined file with a General, a
-Salary, and a Rent row together and verifies each is classified and
-calculated correctly, plus a direct test that the actual shipped
-template downloads and imports with zero errors. Full regression suite
-confirms zero new failures.
+**134/134 of my new and touched tests passing** — 7 new this round (3
+on the real automation wiring, 4 on the consolidated hub and quick-add
+flows). Same 11 pre-existing, unrelated test failures as every prior
+update. Verified visually with real screenshots: the new single
+"Delivery Finance" nav item, and the Drivers & Vehicles tab showing a
+freshly-added driver and vehicle side by side.
 
 ## Install
 ```bash
 cd /home/ivorygif/ivory-accounts
-unzip -o /path/to/ivory-gifts-erp-update-20260904-v61.zip -d .
+unzip -o /path/to/ivory-gifts-erp-update-20260905-v63.zip -d .
 PHP_BIN=/opt/alt/php85/usr/bin/php bash update.sh
 ```
 
-Old `general_expenses`/`salaries`/`rent_expenses` type values are
-replaced by the single `expenses` type — if you had a saved template
-file downloaded from before this update, it's still fully compatible
-(same columns), just now uploaded under the one combined "Expenses"
-option instead of three separate ones.
-
-Does not reset the database, run migrate:fresh, touch .env, or
-regenerate APP_KEY.
+The old direct URLs (`/courier-bills`, `/driver-settlements`, etc.)
+still work exactly as before — nothing was removed, only the sidebar
+entry point was consolidated. Does not reset the database, run
+migrate:fresh, touch .env, or regenerate APP_KEY.

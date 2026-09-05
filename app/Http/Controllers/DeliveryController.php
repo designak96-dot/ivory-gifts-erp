@@ -30,9 +30,9 @@ class DeliveryController extends Controller
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
-    public function show(DeliveryNote $delivery, DeliverySchedulingService $scheduler)
+    public function show(DeliveryNote $delivery, DeliverySchedulingService $scheduler, \App\Services\DeliveryFinanceService $financeService)
     {
-        $delivery->load('customer', 'salesOrder.items', 'driver');
+        $delivery->load('customer', 'salesOrder.items', 'driver', 'courierSupplier', 'courierBill', 'driverSettlement');
         $drivers = $this->drivers();
         $suggestedDate = $scheduler->nextAvailableDate(
             $delivery->delivery_date ?: today(),
@@ -40,7 +40,28 @@ class DeliveryController extends Controller
         );
 
         $isDriverOnly = $this->driverOnly();
-        return view('deliveries.show', compact('delivery', 'drivers', 'suggestedDate', 'isDriverOnly'));
+        $canViewFinance = auth()->user()->hasPermission('deliveries.view.finance');
+        $profitLoss = $canViewFinance && $delivery->delivery_type ? $financeService->directProfitLoss($delivery) : null;
+        $fullyAllocated = $canViewFinance && $delivery->delivery_type ? $financeService->fullyAllocatedProfitLoss($delivery) : null;
+
+        return view('deliveries.show', compact('delivery', 'drivers', 'suggestedDate', 'isDriverOnly', 'canViewFinance', 'profitLoss', 'fullyAllocated'));
+    }
+
+    public function updateFinance(Request $request, DeliveryNote $delivery)
+    {
+        abort_unless(auth()->user()->hasPermission('deliveries.manage'), 403);
+        $data = $request->validate([
+            'delivery_type' => 'required|in:own_company,domestic_outside_courier,international_courier,customer_pickup',
+            'customer_delivery_charge' => 'nullable|numeric|min:0', 'estimated_cost' => 'nullable|numeric|min:0',
+            'actual_cost' => 'nullable|numeric|min:0', 'amount_collected' => 'nullable|numeric|min:0',
+            'charge_override_reason' => 'nullable|string|max:255',
+        ]);
+        // Overriding the charge/cost for one delivery requires the specific permission and the reason is kept for audit history.
+        if ($request->filled('charge_override_reason')) {
+            abort_unless(auth()->user()->hasPermission('deliveries.edit.charge') || auth()->user()->hasPermission('deliveries.edit.cost'), 403);
+        }
+        $delivery->update($data);
+        return back()->with('success', 'Delivery finance details updated.');
     }
 
     public function nextAvailable(Request $request, DeliverySchedulingService $scheduler)
@@ -146,6 +167,8 @@ class DeliveryController extends Controller
 
         DB::transaction(function () use ($delivery, $data, $proofJustUploaded) {
             $oldStatus = $delivery->status;
+            $oldDriverId = $delivery->driver_id;
+            $oldDeliveryDate = $delivery->delivery_date;
             $data['last_updated_by'] = auth()->id();
             $data['delivered_at'] = $data['status'] === 'delivered' ? ($delivery->delivered_at ?: now()) : null;
             if ($data['status'] === 'failed' && $oldStatus !== 'failed') {
@@ -154,6 +177,24 @@ class DeliveryController extends Controller
             $delivery->update($data);
             if ($proofJustUploaded) {
                 SalesOrderStatusHistory::create(['sales_order_id' => $delivery->sales_order_id, 'field' => 'proof', 'old_value' => null, 'new_value' => 'Proof-of-delivery photo uploaded', 'changed_by' => auth()->id()]);
+            }
+
+            // Delivery Finance automation: driver fee + daily allowance are applied
+            // the moment an own-company delivery is genuinely marked delivered —
+            // not left for someone to remember to trigger separately. Recalculates
+            // for both the old and new driver/date so a status reversal or driver
+            // reassignment keeps the daily-allowance split correct either way.
+            if ($delivery->delivery_type === 'own_company') {
+                $financeService = app(\App\Services\DeliveryFinanceService::class);
+                if ($delivery->status === 'delivered' && $delivery->driver_id) {
+                    $financeService->completeOwnDelivery($delivery, $delivery->delivery_date ?? now());
+                } elseif ($oldStatus === 'delivered' && $oldDriverId) {
+                    $delivery->update(['driver_fee' => 0]);
+                    $financeService->recalculateDailyAllowanceForDriver($oldDriverId, $oldDeliveryDate ?? now());
+                }
+                if ($oldDriverId && $oldDriverId !== $delivery->driver_id) {
+                    $financeService->recalculateDailyAllowanceForDriver($oldDriverId, $oldDeliveryDate ?? now());
+                }
             }
 
             $orderStatus = match ($delivery->status) {

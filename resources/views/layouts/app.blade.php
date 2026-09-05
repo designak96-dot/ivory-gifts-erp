@@ -23,6 +23,7 @@
             @if($u->hasPermission('customers.view'))<a @class(['active'=>request()->routeIs('customers.*')]) href="{{ route('customers.index') }}">@include('partials._nav-icon',['name'=>'customers']) Customers</a>@endif
             <p>Operations</p>
             @if($u->hasPermission('deliveries.view'))<a @class(['active'=>request()->routeIs('deliveries.*')]) href="{{ route('deliveries.index') }}">@include('partials._nav-icon',['name'=>'deliveries']) Deliveries</a>@endif
+            @if($u->hasPermission('deliveries.view.finance'))<a @class(['active'=>request()->routeIs('delivery-finance.*','courier-bills.*','driver-settlements.*','vehicle-expenses.*','delivery-finance-settings.*')]) href="{{ route('delivery-finance.index') }}">@include('partials._nav-icon',['name'=>'deliveries']) Delivery Finance</a>@endif
             @if($u->hasPermission('products.view'))<a @class(['active'=>request()->routeIs('products.*')]) href="{{ route('products.index') }}">@include('partials._nav-icon',['name'=>'products']) Products</a>@endif
             @if($u->hasPermission('inventory.view'))<a @class(['active'=>request()->routeIs('inventory.*')]) href="{{ route('inventory.index') }}">@include('partials._nav-icon',['name'=>'inventory']) Inventory</a>@endif
             @if($u->hasPermission('purchases.view'))<a @class(['active'=>request()->routeIs('purchases.*','suppliers.*','raw-materials.*')]) href="{{ route('purchases.index') }}">@include('partials._nav-icon',['name'=>'purchases']) Purchases & Suppliers</a>@endif

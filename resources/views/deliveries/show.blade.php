@@ -60,5 +60,34 @@
 </form>
 @endif
 @if($delivery->pod_photo_path || $delivery->signature_path)<div class="grid cols-2 delivery-proof">@if($delivery->pod_photo_path)<div class="card"><h2>Proof of delivery</h2><img src="{{ asset('storage/'.$delivery->pod_photo_path) }}" alt="Proof of delivery"></div>@endif @if($delivery->signature_path)<div class="card"><h2>Recipient signature</h2><img src="{{ asset('storage/'.$delivery->signature_path) }}" alt="Recipient signature"></div>@endif</div>@endif
+
+@if($canViewFinance)
+<div class="card" style="margin-top:18px">
+<h2>Delivery Finance</h2>
+<form method="post" action="{{ route('deliveries.finance.update',$delivery) }}" style="margin-top:10px">
+@csrf @method('PUT')
+<div class="form-grid">
+<label>Delivery Type<select name="delivery_type" required>
+<option value="own_company" @selected($delivery->delivery_type==='own_company')>Own Company Driver</option>
+<option value="domestic_outside_courier" @selected($delivery->delivery_type==='domestic_outside_courier')>Domestic Outside Courier</option>
+<option value="international_courier" @selected($delivery->delivery_type==='international_courier')>International Courier</option>
+<option value="customer_pickup" @selected($delivery->delivery_type==='customer_pickup')>Customer Pickup</option>
+</select></label>
+<label>Customer Delivery Charge<input type="number" step="0.01" name="customer_delivery_charge" value="{{ $delivery->customer_delivery_charge }}"></label>
+<label>Estimated Cost<input type="number" step="0.01" name="estimated_cost" value="{{ $delivery->estimated_cost }}"></label>
+<label>Actual Cost <span class="muted">(once known)</span><input type="number" step="0.01" name="actual_cost" value="{{ $delivery->actual_cost }}"></label>
+</div>
+<div class="actions"><button class="btn primary small">Save Finance Details</button></div>
+</form>
+
+@if($profitLoss !== null)
+<div class="grid cols-3" style="margin-top:15px">
+<div class="stat"><small>Direct Profit/Loss @if(!$profitLoss['is_final'])<span class="badge amber">Estimated</span>@else<span class="badge green">Final</span>@endif</small><strong class="{{ $profitLoss['profit_loss']>=0?'kpi-good':'kpi-bad' }}">AED {{ number_format($profitLoss['profit_loss'],2) }}</strong></div>
+<div class="stat"><small>Fully Allocated Profit/Loss</small><strong class="{{ $fullyAllocated>=0?'kpi-good':'kpi-bad' }}">AED {{ number_format($fullyAllocated,2) }}</strong></div>
+<div class="stat"><small>Courier / Settlement</small><strong>{{ $delivery->courierBill?->bill_number ?? $delivery->driverSettlement?->settlement_number ?? 'Not yet billed/settled' }}</strong></div>
+</div>
+@endif
+</div>
+@endif
 @endsection
 @push('scripts')<script src="{{ asset('build/assets/delivery.js') }}?v={{ @filemtime(public_path('build/assets/delivery.js')) ?: time() }}" defer></script>@endpush

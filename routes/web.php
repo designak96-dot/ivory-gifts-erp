@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\{AccountingController,AccountTransferController,AuditController,AuthController,BackupController,BankReconciliationController,CalendarController,CashflowController,CashReconciliationController,CreditNoteController,CustomerController,DashboardController,DataImportController,DeliveryController,ExpenseBudgetController,ExpenseController,ExportController,FinanceMigrationImportController,FinancialAccountController,GlobalSearchController,ImportExportController,InventoryController,InvoiceController,IvoryAiController,LegacyDeliveryImportController,OrderAttachmentController,OrderCommentController,PayrollController,ProductController,ProductImportController,ProductionController,ProofController,PublicShareController,QuotationController,RawMaterialController,RecoverySnapshotController,ReportController,SalesOrderController,SavedFilterController,SettingsController,SetupController,ShareLinkController,StaffAttendanceController,StaffController,StaffGratuityController,StaffLeaveController,StaffOvertimeController,StaffTicketController,SupplierController,SyncVersionController,SystemHealthController,TaskController,UserController,VatReportController,WhatsAppShareController};
+use App\Http\Controllers\{AccountingController,AccountTransferController,AuditController,AuthController,BackupController,BankReconciliationController,CalendarController,CashflowController,CashReconciliationController,CourierBillController,CreditNoteController,CustomerController,DashboardController,DataImportController,DeliveryController,DeliveryFinanceHubController,DeliveryFinanceSettingsController,DriverSettlementController,ExpenseBudgetController,ExpenseController,ExportController,FinanceMigrationImportController,FinancialAccountController,GlobalSearchController,ImportExportController,InventoryController,InvoiceController,IvoryAiController,LegacyDeliveryImportController,OrderAttachmentController,OrderCommentController,PayrollController,ProductController,ProductImportController,ProductionController,ProofController,PublicShareController,QuotationController,RawMaterialController,RecoverySnapshotController,ReportController,SalesOrderController,SavedFilterController,SettingsController,SetupController,ShareLinkController,StaffAttendanceController,StaffController,StaffGratuityController,StaffLeaveController,StaffOvertimeController,StaffTicketController,SupplierController,SyncVersionController,SystemHealthController,TaskController,UserController,VatReportController,VehicleExpenseController,WhatsAppShareController};
 use Illuminate\Support\Facades\Route;
 
 Route::get('/setup', [SetupController::class,'create'])->name('setup.create');
@@ -113,6 +113,32 @@ Route::middleware('installed')->group(function(){
         Route::get('/deliveries/next-available',[DeliveryController::class,'nextAvailable'])->middleware('permission:deliveries.view')->name('deliveries.next');
         Route::get('/delivery-report',[DeliveryController::class,'report'])->middleware('permission:deliveries.view')->name('deliveries.report');
         Route::get('/deliveries/{delivery}',[DeliveryController::class,'show'])->middleware('permission:deliveries.view')->name('deliveries.show');
+        Route::put('/deliveries/{delivery}/finance',[DeliveryController::class,'updateFinance'])->middleware('permission:deliveries.manage')->name('deliveries.finance.update');
+
+        Route::get('/delivery-finance-settings',[DeliveryFinanceSettingsController::class,'index'])->middleware('permission:deliveries.manage')->name('delivery-finance-settings.index');
+        Route::post('/delivery-finance-settings',[DeliveryFinanceSettingsController::class,'store'])->middleware('permission:deliveries.manage')->name('delivery-finance-settings.store');
+
+        Route::get('/delivery-finance',[DeliveryFinanceHubController::class,'index'])->middleware('permission:deliveries.view.finance')->name('delivery-finance.index');
+        Route::post('/delivery-finance/drivers',[DeliveryFinanceHubController::class,'storeDriver'])->middleware('permission:deliveries.manage')->name('delivery-finance.drivers.store');
+        Route::post('/delivery-finance/vehicles',[DeliveryFinanceHubController::class,'storeVehicle'])->middleware('permission:deliveries.manage')->name('delivery-finance.vehicles.store');
+
+        Route::get('/courier-bills',[CourierBillController::class,'index'])->middleware('permission:deliveries.view.finance')->name('courier-bills.index');
+        Route::get('/courier-bills/create',[CourierBillController::class,'create'])->middleware('permission:courier-bills.manage')->name('courier-bills.create');
+        Route::post('/courier-bills',[CourierBillController::class,'store'])->middleware('permission:courier-bills.manage')->name('courier-bills.store');
+        Route::get('/courier-bills/{bill}',[CourierBillController::class,'show'])->middleware('permission:deliveries.view.finance')->name('courier-bills.show');
+        Route::post('/courier-bills/{bill}/approve',[CourierBillController::class,'approve'])->middleware('permission:courier-bills.approve')->name('courier-bills.approve');
+        Route::post('/courier-bills/{bill}/pay',[CourierBillController::class,'pay'])->middleware('permission:courier-bills.pay')->name('courier-bills.pay');
+
+        Route::get('/driver-settlements',[DriverSettlementController::class,'index'])->middleware('permission:deliveries.view.finance')->name('driver-settlements.index');
+        Route::post('/driver-settlements/preview',[DriverSettlementController::class,'preview'])->middleware('permission:driver-settlements.manage')->name('driver-settlements.preview');
+        Route::post('/driver-settlements',[DriverSettlementController::class,'store'])->middleware('permission:driver-settlements.manage')->name('driver-settlements.store');
+        Route::get('/driver-settlements/{settlement}',[DriverSettlementController::class,'show'])->middleware('permission:deliveries.view.finance')->name('driver-settlements.show');
+        Route::post('/driver-settlements/{settlement}/pay',[DriverSettlementController::class,'pay'])->middleware('permission:driver-settlements.pay')->name('driver-settlements.pay');
+
+        Route::get('/vehicle-expenses',[VehicleExpenseController::class,'index'])->middleware('permission:deliveries.view.finance')->name('vehicle-expenses.index');
+        Route::post('/vehicle-expenses',[VehicleExpenseController::class,'store'])->middleware('permission:vehicle-expenses.manage')->name('vehicle-expenses.store');
+        Route::post('/vehicle-expenses/{vehicleExpense}/allocate',[VehicleExpenseController::class,'allocate'])->middleware('permission:vehicle-expenses.manage')->name('vehicle-expenses.allocate');
+        Route::post('/vehicles',[VehicleExpenseController::class,'storeVehicle'])->middleware('permission:vehicle-expenses.manage')->name('vehicles.store');
         Route::patch('/deliveries/{delivery}',[DeliveryController::class,'update'])->middleware('permission:deliveries.manage')->name('deliveries.update');
         Route::patch('/deliveries/{delivery}/order-workflow',[DeliveryController::class,'updateOrderWorkflow'])->middleware('permission:deliveries.manage')->name('deliveries.order-workflow');
         Route::patch('/deliveries/{delivery}/quick-update',[DeliveryController::class,'quickUpdate'])->middleware('permission:deliveries.manage')->name('deliveries.quick-update');
