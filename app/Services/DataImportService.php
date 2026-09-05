@@ -28,7 +28,56 @@ class DataImportService
 {
     private const VAT_TOLERANCE = 0.05;
 
-    public function __construct(private PhoneNormalizer $phones) {}
+    public function __construct(private PhoneNormalizer $phones, private \App\Services\AccountingService $accounting, private \App\Services\NumberingService $numbers) {}
+
+    /**
+     * Posts the real Debit AR / Credit Sales Revenue (+ VAT Output) journal
+     * entry for an invoice — the exact same accounts SalesWorkflow::
+     * orderToInvoice() uses for a manually-created order, so an imported
+     * order's revenue genuinely appears in Income/P&L reports rather than
+     * only existing as an Invoice record. Guarded against double-posting:
+     * checks for an existing entry first, since re-importing the same
+     * order must never post the same revenue twice.
+     */
+    private function postInvoiceIfNotAlready(Invoice $invoice): void
+    {
+        if (\App\Models\JournalEntry::where('reference_type', Invoice::class)->where('reference_id', $invoice->id)->exists()) {
+            return;
+        }
+        $lines = [
+            ['account' => '1100', 'debit' => (float) $invoice->grand_total, 'credit' => 0],
+            ['account' => '4000', 'debit' => 0, 'credit' => (float) $invoice->subtotal],
+        ];
+        if ((float) $invoice->tax_total > 0) {
+            $lines[] = ['account' => '2100', 'debit' => 0, 'credit' => (float) $invoice->tax_total];
+        }
+        $this->accounting->post($invoice, "Invoice {$invoice->invoice_number}", $lines, (string) $invoice->invoice_date);
+    }
+
+    /**
+     * Creates a real Payment (+ allocation) and posts the matching Debit
+     * Cash/Bank / Credit AR entry — the same pattern SalesWorkflow::
+     * recordPayment() uses — so an imported "paid" order's cash actually
+     * shows up in Bank/Cash Reconciliation and Cashflow, not just as a
+     * number on the Invoice record. Guarded the same way: does nothing if
+     * a payment already exists for this invoice (re-import safe).
+     */
+    private function postPaymentIfNotAlready(Invoice $invoice, float $amount, string $date, string $method = 'bank'): void
+    {
+        if ($amount <= 0 || \App\Models\Payment::whereHas('allocations', fn ($q) => $q->where('invoice_id', $invoice->id))->exists()) {
+            return;
+        }
+        $payment = \App\Models\Payment::create([
+            'payment_number' => $this->numbers->next('payment'), 'customer_id' => $invoice->customer_id,
+            'method' => $method, 'amount' => $amount, 'payment_date' => $date, 'received_by' => auth()->id(),
+        ]);
+        $payment->allocations()->create(['invoice_id' => $invoice->id, 'allocated_amount' => $amount]);
+        $cashAccount = in_array($method, ['cash', 'cod'], true) ? '1000' : '1010';
+        $this->accounting->post($payment, "Payment {$payment->payment_number}", [
+            ['account' => $cashAccount, 'debit' => $amount, 'credit' => 0],
+            ['account' => '1100', 'debit' => 0, 'credit' => $amount],
+        ], $date);
+    }
 
     public function parseFile(string $path, string $extension): array
     {
@@ -422,6 +471,14 @@ class DataImportService
                         InvoiceItem::create(['invoice_id' => $invoice->id, 'description' => $desc, 'qty' => $qty, 'rate' => $qty > 0 ? round($lineTotal / $qty, 4) : $lineTotal, 'line_total' => $lineTotal]);
                     }
 
+                    // Without this, the imported order would only ever exist as an
+                    // Invoice record — never actually appearing as revenue in
+                    // Income/P&L, nor as real cash in Bank/Cash Reconciliation.
+                    $this->postInvoiceIfNotAlready($invoice);
+                    if ($paidAmount > 0) {
+                        $this->postPaymentIfNotAlready($invoice, $paidAmount, (string) $orderDate->toDateString());
+                    }
+
                     DataImportRow::create(['data_import_id' => $import->id, 'source_id' => $sourceNumber, 'label' => $customerName, 'outcome' => $existing ? 'updated' : 'created']);
                 });
             } catch (\Throwable $e) {
@@ -526,6 +583,10 @@ class DataImportService
                         'grand_total' => $grandTotal, 'amount_paid' => $paidAmount, 'outstanding_amount' => round($grandTotal - $paidAmount, 2),
                     ]);
                     InvoiceItem::create(['invoice_id' => $invoice->id, 'description' => $row['description'] ?? 'Imported order', 'qty' => $qty, 'rate' => $unitPrice, 'tax_amount' => $taxAmount, 'line_total' => $grandTotal]);
+                    $this->postInvoiceIfNotAlready($invoice);
+                    if ($paidAmount > 0) {
+                        $this->postPaymentIfNotAlready($invoice, $paidAmount, (string) $orderDate->toDateString());
+                    }
                     $order->update(['payment_status' => $invoiceStatus === 'paid' ? 'paid' : ($paidAmount > 0 ? 'partial' : 'unpaid')]);
 
                     $status = in_array($row['status'] ?? null, SimpleWorkflowService::STATUSES, true) ? $row['status'] : 'pending';

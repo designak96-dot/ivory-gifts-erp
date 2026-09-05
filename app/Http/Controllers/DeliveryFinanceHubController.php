@@ -30,7 +30,15 @@ class DeliveryFinanceHubController extends Controller
         abort_unless(auth()->user()->hasPermission('deliveries.view.finance'), 403);
         $tab = $request->query('tab', 'courier-bills');
 
-        $drivers = User::whereHas('roles', fn ($q) => $q->where('name', 'driver'))->orderBy('name')->get();
+        // Must match the same "who counts as a driver" rule the Deliveries
+        // module itself uses when assigning a driver — otherwise someone
+        // picked there could silently never appear here. Also includes
+        // anyone actually assigned as driver_id on a real delivery, so a
+        // driver never becomes invisible here just because of how their
+        // role happens to be set up.
+        $roleBasedDriverIds = User::whereHas('roles', fn ($q) => $q->whereIn('name', ['driver', 'delivery_coordinator']))->pluck('id');
+        $assignedDriverIds = DeliveryNote::whereNotNull('driver_id')->distinct()->pluck('driver_id');
+        $drivers = User::whereIn('id', $roleBasedDriverIds->merge($assignedDriverIds)->unique())->orderBy('name')->get();
         $vehicles = Vehicle::orderBy('name')->get();
 
         return view('deliveries.finance-hub', [

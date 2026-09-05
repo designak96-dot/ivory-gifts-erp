@@ -13,7 +13,9 @@ class VehicleExpenseController extends Controller
         abort_unless(auth()->user()->hasPermission('deliveries.view.finance'), 403);
         $expenses = VehicleExpense::with('vehicle', 'driver', 'supplier')->latest('expense_date')->paginate(25);
         $vehicles = Vehicle::where('is_active', true)->orderBy('name')->get();
-        $drivers = \App\Models\User::whereIn('id', DeliveryNote::where('delivery_type', 'own_company')->whereNotNull('driver_id')->distinct()->pluck('driver_id'))->orderBy('name')->get();
+        $roleBasedDriverIds = \App\Models\User::whereHas('roles', fn ($q) => $q->whereIn('name', ['driver', 'delivery_coordinator']))->pluck('id');
+        $assignedDriverIds = DeliveryNote::whereNotNull('driver_id')->distinct()->pluck('driver_id');
+        $drivers = \App\Models\User::whereIn('id', $roleBasedDriverIds->merge($assignedDriverIds)->unique())->orderBy('name')->get();
         return view('deliveries.vehicle-expenses.index', compact('expenses', 'vehicles', 'drivers'));
     }
 

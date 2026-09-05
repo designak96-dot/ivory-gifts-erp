@@ -12,8 +12,9 @@ class DriverSettlementController extends Controller
     {
         abort_unless(auth()->user()->hasPermission('deliveries.view.finance'), 403);
         $settlements = DriverSettlement::with('driver')->latest('end_date')->paginate(20);
-        $driverIds = \App\Models\DeliveryNote::where('delivery_type', 'own_company')->whereNotNull('driver_id')->distinct()->pluck('driver_id');
-        $drivers = User::whereIn('id', $driverIds)->orderBy('name')->get();
+        $roleBasedDriverIds = User::whereHas('roles', fn ($q) => $q->whereIn('name', ['driver', 'delivery_coordinator']))->pluck('id');
+        $assignedDriverIds = \App\Models\DeliveryNote::whereNotNull('driver_id')->distinct()->pluck('driver_id');
+        $drivers = User::whereIn('id', $roleBasedDriverIds->merge($assignedDriverIds)->unique())->orderBy('name')->get();
         return view('deliveries.driver-settlements.index', compact('settlements', 'drivers'));
     }
 

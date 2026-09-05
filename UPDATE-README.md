@@ -1,64 +1,72 @@
-# Ivory Gifts ERP — Consolidated Delivery Finance Hub + Real Automation Fix — 2026-09-05-v63
+# Ivory Gifts ERP — Imported Orders Now Actually Post to Accounting — 2026-09-05-v65
 
-## Two real things fixed here, not one
+## Your question surfaced a real, important gap
 
-### 1. The automation you asked about wasn't actually wired up
+You asked: if you import Current or Historical Orders, does it come to
+Income? I checked the actual code rather than assume, and the honest
+answer at the time was **no**.
 
-I built and tested the driver-fee and daily-allowance logic in v62, but
-checking the actual delivery-completion flow (`DeliveryController::update()`)
-showed it was **never called** when a delivery is genuinely marked
-Delivered through the normal screen — only when the service method was
-called directly, which my own tests did, but the real app never did.
-This is exactly what you'd have experienced as "the automation isn't
-working."
+Here's exactly why. When you create an order and invoice the normal
+way (through the app's own screens), it posts a real journal entry:
+Debit Accounts Receivable, Credit Sales Revenue (account 4000), Credit
+VAT Output — and when a payment comes in, a separate entry: Debit
+Cash/Bank, Credit Accounts Receivable. That's what actually makes
+revenue show up in Income/P&L reports and cash show up in Bank/Cash
+Reconciliation.
 
-**Fixed**: marking an Own Company delivery as Delivered now
-automatically applies the AED 10 driver fee and the shared daily AED 5
-allowance, inside the same save — not a separate step to remember.
-Reverting a delivery away from Delivered (failed/cancelled) correctly
-removes the fee and recalculates the day's allowance too, rather than
-leaving a stale fee behind.
+The import service was only ever creating the `Invoice` **record** —
+correct-looking in the Invoices list, correctly tracking paid/remaining
+— but never actually posting either of those journal entries. So
+imported revenue would have been genuinely invisible in your P&L,
+Income reports, and Cashflow, even though the invoice itself looked
+completely normal.
 
-Verified with three new tests that go through the **real endpoint**,
-not the service directly: marking one delivery delivered applies AED
-10 + AED 5 automatically; five real completions in one day still
-produce exactly one AED 5 allowance split five ways; reverting a
-delivery's status correctly removes what was auto-applied.
+## Fixed
 
-### 2. Too many separate nav items — consolidated into one
+Both **Historical Orders** and **Current Orders** imports now post the
+exact same journal entries the manual flow does:
+- Revenue is posted at invoice creation (Debit AR, Credit Sales
+  Revenue, Credit VAT Output) — this happens even for an unpaid order,
+  which is correct accrual-basis accounting.
+- If the order shows an amount paid, a **real Payment record** is
+  created (not just a number on the Invoice) and its own journal entry
+  posted (Debit Cash/Bank, Credit AR) — so it now genuinely appears in
+  Bank/Cash Reconciliation and Cashflow too.
 
-**Courier Bills, Driver Settlements, Vehicle Expenses, and Delivery
-Finance Settings are now one "Delivery Finance" page with tabs**,
-instead of four separate sidebar links. Same underlying features, same
-routes still work if you have them bookmarked — just one entry point
-instead of four.
-
-### Drivers & Vehicles — the part that was missing entirely
-
-New **"Drivers & Vehicles" tab** on that same page. Adding a driver was
-previously a multi-step trip through Users & Roles (create user, assign
-role, etc.) — now it's name + phone, one button, done, and the new
-driver is immediately available in every delivery-assignment dropdown.
-Vehicles work the same way. Verified directly: a driver added through
-this quick form already has the correct role attached and shows up
-immediately.
+**Re-importing the same order is still safe** — verified directly that
+running the same import twice does not create a second revenue entry
+or a second payment. An unpaid order correctly posts revenue but never
+invents a payment that didn't happen.
 
 ## Testing
-**134/134 of my new and touched tests passing** — 7 new this round (3
-on the real automation wiring, 4 on the consolidated hub and quick-add
-flows). Same 11 pre-existing, unrelated test failures as every prior
-update. Verified visually with real screenshots: the new single
-"Delivery Finance" nav item, and the Drivers & Vehicles tab showing a
-freshly-added driver and vehicle side by side.
+**141/141 of my new and touched tests passing** — 4 new this round,
+each checking the actual `journal_entries`/`journal_lines` tables
+directly (not just that the Invoice record looks right): revenue
+correctly hits account 4000, AR correctly hits 1100, a real Payment
+gets created and posted when paid, re-import doesn't double-post, and
+an unpaid order posts revenue without inventing a payment. All 22
+pre-existing import tests re-verified passing, and the full suite shows
+zero new failures beyond the same 11 pre-existing, unrelated ones from
+every prior update.
 
 ## Install
 ```bash
 cd /home/ivorygif/ivory-accounts
-unzip -o /path/to/ivory-gifts-erp-update-20260905-v63.zip -d .
+unzip -o /path/to/ivory-gifts-erp-update-20260905-v65.zip -d .
 PHP_BIN=/opt/alt/php85/usr/bin/php bash update.sh
 ```
 
-The old direct URLs (`/courier-bills`, `/driver-settlements`, etc.)
-still work exactly as before — nothing was removed, only the sidebar
-entry point was consolidated. Does not reset the database, run
-migrate:fresh, touch .env, or regenerate APP_KEY.
+## Important — about orders you already imported before this fix
+
+This fix changes behavior for **new imports going forward**. Orders you
+already imported before installing this update will **not**
+retroactively post to accounting just from installing this ZIP — their
+Invoice records already exist, so the "don't double-post" safety check
+will correctly leave them alone. If you have already-imported orders
+whose revenue you need reflected in accounting, tell me and I'll build
+a one-time, safe catch-up command that posts the missing entries for
+exactly those orders — without touching anything already posted
+correctly.
+
+Does not reset the database, run migrate:fresh, touch .env, or
+regenerate APP_KEY.
