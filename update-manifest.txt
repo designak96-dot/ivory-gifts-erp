@@ -1,1 +1,1 @@
-app/Http/Controllers/DeliveryController.php
+resources/views/partials/_ready-whatsapp-js.blade.php

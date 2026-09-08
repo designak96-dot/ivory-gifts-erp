@@ -7,30 +7,36 @@
     const down = String.fromCodePoint(0x1F447);
     const heart = String.fromCodePoint(0x1F90D);
 
-    const buildReadyMessage = (data) => [
-        `مرحبا ${data.customer_name} ${wave}`,
-        '',
-        `طلبك جاهز! ${party}${sparkles}`,
-        '',
-        `${box} *الطلب ${data.order_number}*`,
-        '',
-        `يمكنك مشاهدة الفاتورة وتفاصيل الطلب هنا ${down}`,
-        '',
-        `Hi ${data.customer_name} ${wave}`,
-        '',
-        `Your order is ready! ${party}${sparkles}`,
-        '',
-        `${box} *ORDER ${data.order_number}*`,
-        '',
-        `You can view your invoice & order details here ${down}`,
-        '',
-        data.share_url,
-        '',
-        `شكراً لاختيارك لنا ${heart}`,
-        `Thank you for choosing us ${heart}`,
-        '',
-        '*Ivory Gifts*',
-    ].join('\n');
+    const buildMessage = (data) => {
+        const isDelivered = data.status === 'delivered';
+        const arabicStatus = isDelivered ? `تم تسليم طلبك بنجاح! ${party}${sparkles}` : `طلبك جاهز! ${party}${sparkles}`;
+        const englishStatus = isDelivered ? `Your order has been delivered! ${party}${sparkles}` : `Your order is ready! ${party}${sparkles}`;
+
+        return [
+            `مرحبا ${data.customer_name} ${wave}`,
+            '',
+            arabicStatus,
+            '',
+            `${box} *الطلب ${data.order_number}*`,
+            '',
+            `يمكنك مشاهدة الفاتورة وتفاصيل الطلب هنا ${down}`,
+            '',
+            `Hi ${data.customer_name} ${wave}`,
+            '',
+            englishStatus,
+            '',
+            `${box} *ORDER ${data.order_number}*`,
+            '',
+            `You can view your invoice & order details here ${down}`,
+            '',
+            data.share_url,
+            '',
+            `شكراً لاختيارك لنا ${heart}`,
+            `Thank you for choosing us ${heart}`,
+            '',
+            '*Ivory Gifts*',
+        ].join('\n');
+    };
 
     const buildModal = (title, message, buttons) => {
         const overlay = document.createElement('div');
@@ -59,67 +65,35 @@
         });
     };
 
-    const whatsappWindowName = 'ivory_whatsapp';
-    let whatsappWebWindow = null;
-    let cancelPendingWhatsAppFallback = null;
-
-    const openWhatsAppWeb = (whatsappWebUrl) => {
+    // Copy-to-clipboard + a phone-only WhatsApp URL (no `text=` parameter at
+    // all) — confirmed, verified working technique. WhatsApp's own URL
+    // importer for the `text=` parameter is what corrupts/strips emojis and
+    // Arabic text for long, formatted messages; bypassing it entirely by
+    // using the OS clipboard as the transport preserves every character
+    // exactly. This costs one extra manual step (paste), but that trade-off
+    // is what actually works, verified directly against real WhatsApp
+    // behavior — unlike the URL-encoding approach this replaces, which
+    // could not be made to reliably skip WhatsApp's own interstitial page
+    // or preserve emojis through it.
+    const copyMessage = async (message) => {
         try {
-            if (whatsappWebWindow && !whatsappWebWindow.closed) {
-                whatsappWebWindow.location.replace(whatsappWebUrl);
-                whatsappWebWindow.focus();
-                return;
-            }
-        } catch (error) {
-            whatsappWebWindow = null;
+            await navigator.clipboard.writeText(message);
+            return true;
+        } catch {
+            const textarea = document.createElement('textarea');
+            textarea.value = message;
+            textarea.setAttribute('readonly', '');
+            textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            const copied = document.execCommand('copy');
+            textarea.remove();
+            return copied;
         }
-
-        whatsappWebWindow = window.open(whatsappWebUrl, whatsappWindowName);
-        whatsappWebWindow?.focus();
-    };
-
-    const openPreferredWhatsApp = (whatsappAppUrl, whatsappWebUrl) => {
-        cancelPendingWhatsAppFallback?.();
-
-        let appOpened = false;
-        let fallbackTimer = null;
-        const probe = document.createElement('iframe');
-        probe.hidden = true;
-        probe.setAttribute('aria-hidden', 'true');
-        probe.style.display = 'none';
-
-        const cleanup = () => {
-            if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
-            document.removeEventListener('visibilitychange', markAppOpened);
-            window.removeEventListener('blur', markAppOpened);
-            probe.remove();
-            if (cancelPendingWhatsAppFallback === cleanup) cancelPendingWhatsAppFallback = null;
-        };
-
-        const markAppOpened = () => {
-            if (!document.hidden && document.hasFocus()) return;
-            appOpened = true;
-            cleanup();
-        };
-
-        document.addEventListener('visibilitychange', markAppOpened);
-        window.addEventListener('blur', markAppOpened);
-        document.body.appendChild(probe);
-        probe.src = whatsappAppUrl;
-
-        fallbackTimer = window.setTimeout(() => {
-            cleanup();
-            if (!appOpened) openWhatsAppWeb(whatsappWebUrl);
-        }, 2500);
-
-        cancelPendingWhatsAppFallback = cleanup;
     };
 
     document.addEventListener('click', async (event) => {
-        const btn = event.target.closest(
-            '[data-whatsapp-share][data-whatsapp-status="ready"], '
-            + '[data-ready-whatsapp-share][data-whatsapp-status="ready"]'
-        );
+        const btn = event.target.closest('[data-whatsapp-share], [data-ready-whatsapp-share]');
         if (!btn) return;
 
         event.preventDefault();
@@ -164,12 +138,20 @@
                 }
 
                 const data = await linkRes.json();
-                const finalMessage = buildReadyMessage(data);
-                const encodedPhone = encodeURIComponent(data.phone);
-                const encodedMessage = encodeURIComponent(finalMessage);
-                const whatsappAppUrl = 'whatsapp://send?phone=' + encodedPhone + '&text=' + encodedMessage;
-                const whatsappWebUrl = 'https://web.whatsapp.com/send?phone=' + encodedPhone + '&text=' + encodedMessage;
-                openPreferredWhatsApp(whatsappAppUrl, whatsappWebUrl);
+                const message = buildMessage(data);
+                const phoneOnlyUrl = 'https://wa.me/' + encodeURIComponent(data.phone);
+
+                const copied = await copyMessage(message);
+                if (!copied) {
+                    alert('Could not copy the WhatsApp message — please try again.');
+                    return;
+                }
+
+                buildModal(
+                    'Message copied',
+                    'Open WhatsApp, then paste the message with Ctrl+V (or press and hold, then Paste, on mobile). If a draft is already there, select it first with Ctrl+A so the paste replaces it cleanly.',
+                    [{ label: 'Open WhatsApp', primary: true, onClick: () => window.open(phoneOnlyUrl, '_blank', 'noopener') }]
+                );
             };
 
             if (!check.has_proof) {
