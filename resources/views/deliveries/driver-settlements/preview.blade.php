@@ -18,6 +18,7 @@
 <input type="hidden" name="end_date" value="{{ $data['end_date'] }}">
 <button class="btn primary">Confirm & Create Settlement</button>
 </form>
+<a class="btn" style="margin-top:8px" href="{{ route('driver-settlements.report', ['driver_id' => $driver->id, 'start_date' => $data['start_date'], 'end_date' => $data['end_date']]) }}">Preview Full Daily Report</a>
 @endif
 </div>
 @endsection

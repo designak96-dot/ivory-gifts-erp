@@ -1,72 +1,78 @@
-# Ivory Gifts ERP — Imported Orders Now Actually Post to Accounting — 2026-09-05-v65
+# Ivory Gifts ERP — Fix Driver Fee Not Applying via Delivery Finance Section — 2026-09-07-v67
 
-## Your question surfaced a real, important gap
+## What your screenshot showed
 
-You asked: if you import Current or Historical Orders, does it come to
-Income? I checked the actual code rather than assume, and the honest
-answer at the time was **no**.
+Order 01-0926: AED 40 charge, "Provider: Akbar Sha" (a driver), but
+**Profit/Loss showed the full AED 40** — no AED 10 fee deducted at all.
 
-Here's exactly why. When you create an order and invoice the normal
-way (through the app's own screens), it posts a real journal entry:
-Debit Accounts Receivable, Credit Sales Revenue (account 4000), Credit
-VAT Output — and when a payment comes in, a separate entry: Debit
-Cash/Bank, Credit Accounts Receivable. That's what actually makes
-revenue show up in Income/P&L reports and cash show up in Bank/Cash
-Reconciliation.
+## Why — a real, genuine bug
 
-The import service was only ever creating the `Invoice` **record** —
-correct-looking in the Invoices list, correctly tracking paid/remaining
-— but never actually posting either of those journal entries. So
-imported revenue would have been genuinely invisible in your P&L,
-Income reports, and Cashflow, even though the invoice itself looked
-completely normal.
+The AED 10 driver fee automation only fired from one specific place:
+the main "mark Delivered" status-update action. But `delivery_type`
+and the driver are very often actually set or confirmed **afterward**,
+through the delivery's own "Delivery Finance" section — and that form
+never triggered the fee logic at all.
+
+So if a delivery was already marked Delivered (from before this
+automation existed, or before its type was ever confirmed), and you
+then went into Delivery Finance to set "Own Company Driver" and pick
+Akbar Sha — nothing applied the fee. It would show AED 0 driver fee
+forever, with no obvious way to fix it short of un-delivering and
+re-delivering the order, which isn't something you'd think to do for
+an order that's already correctly delivered.
 
 ## Fixed
 
-Both **Historical Orders** and **Current Orders** imports now post the
-exact same journal entries the manual flow does:
-- Revenue is posted at invoice creation (Debit AR, Credit Sales
-  Revenue, Credit VAT Output) — this happens even for an unpaid order,
-  which is correct accrual-basis accounting.
-- If the order shows an amount paid, a **real Payment record** is
-  created (not just a number on the Invoice) and its own journal entry
-  posted (Debit Cash/Bank, Credit AR) — so it now genuinely appears in
-  Bank/Cash Reconciliation and Cashflow too.
+Saving the Delivery Finance section now applies the same AED 10 fee +
+AED 5 daily allowance automation the moment all three things are
+genuinely true — delivered, Own Company, and a driver assigned —
+regardless of which screen made that true. Verified directly with your
+exact scenario: an already-delivered order, driver already assigned,
+type set to Own Company via this form — the fee now applies
+immediately, and profit correctly becomes AED 25 (40 − 10 − 5), not
+the full AED 40. Re-saving the form again afterward does not
+double-apply the fee — verified directly.
 
-**Re-importing the same order is still safe** — verified directly that
-running the same import twice does not create a second revenue entry
-or a second payment. An unpaid order correctly posts revenue but never
-invents a payment that didn't happen.
+## For the order in your screenshot specifically
+
+Once this is installed, open that delivery's page and re-save its
+Delivery Finance section (even without changing anything) — the fee
+should apply immediately, since it now checks "is this genuinely a
+delivered, own-company delivery with a driver, but the fee hasn't been
+applied yet" every time that form is saved.
+
+## How to move a delivery from "Unsettled" to paid
+
+This isn't a bug — it's the actual intended two-step process:
+
+1. Go to **Delivery Finance → Driver Settlements**, pick the driver
+   (e.g., Akbar Sha) and a date range that includes this delivery, and
+   click **Preview** — this shows every unsettled fee/allowance for
+   that driver in that period.
+2. Click **Confirm & Create Settlement** — this locks those specific
+   deliveries into one settlement record (so they can't accidentally
+   end up in a second settlement later).
+3. Open that settlement and click **Record Payment** — enter the
+   amount, date, method, and upload proof (proof is required). Once
+   paid, the delivery's status changes from "Unsettled" to showing the
+   settlement's status (Paid/Partially Paid) instead.
+
+The **Daily Deliveries** tab you're looking at doesn't have a
+"mark settled" button directly on it — settling happens through Driver
+Settlements specifically, so one settlement can properly cover many
+deliveries at once with one real payment, rather than paying each
+delivery one at a time.
 
 ## Testing
-**141/141 of my new and touched tests passing** — 4 new this round,
-each checking the actual `journal_entries`/`journal_lines` tables
-directly (not just that the Invoice record looks right): revenue
-correctly hits account 4000, AR correctly hits 1100, a real Payment
-gets created and posted when paid, re-import doesn't double-post, and
-an unpaid order posts revenue without inventing a payment. All 22
-pre-existing import tests re-verified passing, and the full suite shows
-zero new failures beyond the same 11 pre-existing, unrelated ones from
-every prior update.
+**172/172 tests passing** (2 new), same 11 pre-existing unrelated
+failures as every prior update.
 
 ## Install
 ```bash
 cd /home/ivorygif/ivory-accounts
-unzip -o /path/to/ivory-gifts-erp-update-20260905-v65.zip -d .
+unzip -o /path/to/ivory-gifts-erp-update-20260907-v67.zip -d .
 PHP_BIN=/opt/alt/php85/usr/bin/php bash update.sh
 ```
 
-## Important — about orders you already imported before this fix
-
-This fix changes behavior for **new imports going forward**. Orders you
-already imported before installing this update will **not**
-retroactively post to accounting just from installing this ZIP — their
-Invoice records already exist, so the "don't double-post" safety check
-will correctly leave them alone. If you have already-imported orders
-whose revenue you need reflected in accounting, tell me and I'll build
-a one-time, safe catch-up command that posts the missing entries for
-exactly those orders — without touching anything already posted
-correctly.
-
-Does not reset the database, run migrate:fresh, touch .env, or
-regenerate APP_KEY.
+Backend-only fix — no migration needed. Does not reset the database,
+run migrate:fresh, touch .env, or regenerate APP_KEY.

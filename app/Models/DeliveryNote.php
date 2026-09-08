@@ -26,6 +26,7 @@ class DeliveryNote extends BusinessModel
     }
 
     public function courierSupplier() { return $this->belongsTo(Supplier::class, 'courier_supplier_id'); }
+    public function vehicle() { return $this->belongsTo(Vehicle::class); }
     public function courierBill() { return $this->belongsTo(CourierBill::class); }
     public function driverSettlement() { return $this->belongsTo(DriverSettlement::class); }
 

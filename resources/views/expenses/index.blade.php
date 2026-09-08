@@ -15,6 +15,10 @@
 <label>VAT amount<input type="number" step=".01" min="0" name="tax_amount" value="0"></label>
 <label>Reference<input name="reference"></label>
 <label>Description<input name="description"></label>
+<label>Vehicle <span class="muted">(for petrol/vehicle costs)</span><select name="vehicle_id"><option value="">—</option>@foreach($vehicles as $v)<option value="{{ $v->id }}">{{ $v->name }}</option>@endforeach</select></label>
+<label>Driver <span class="muted">(if relevant)</span><select name="driver_id"><option value="">—</option>@foreach(\App\Models\User::whereHas('roles', fn($q)=>$q->whereIn('name',['driver','delivery_coordinator']))->orderBy('name')->get() as $drv)<option value="{{ $drv->id }}">{{ $drv->name }}</option>@endforeach</select></label>
+<label>Paid By <span class="muted">(required if a vehicle is selected)</span><select name="paid_by"><option value="">—</option><option value="company">Company</option><option value="driver">Driver (needs reimbursement)</option></select></label>
+<label>Delivery Day <span class="muted">(for daily driver report linkage)</span><input type="date" name="delivery_day"></label>
 
 <div class="span-2 upload-dropzone" data-dropzone data-target="invoice-file-input">
 <label style="display:block;margin-bottom:6px">Expense Invoice / Bill <span class="muted">(optional)</span></label>
@@ -40,7 +44,7 @@
 <div class="card" style="margin-top:18px"><h2>Expense register</h2><div class="table-wrap" style="margin-top:15px"><table><thead><tr><th>Expense</th><th>Date</th><th>Category</th><th>Payee</th><th>Method</th><th>Total</th><th>Invoice/Bill</th><th>Payment Proof</th></tr></thead><tbody>
 @forelse($expenses as $e)
 <tr>
-<td><b>{{ $e->expense_number }}</b></td>
+<td><a href="{{ route('expenses.show',$e) }}"><b>{{ $e->expense_number }}</b></a>@if($e->vehicle_id)<div class="muted">🚗 Vehicle-linked</div>@endif</td>
 <td>{{ $e->expense_date->format('d M Y') }}</td>
 <td>{{ $e->category }}</td>
 <td>{{ $e->payee?:'—' }}</td>

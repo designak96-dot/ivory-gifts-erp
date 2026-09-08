@@ -60,7 +60,23 @@ class DeliveryController extends Controller
         if ($request->filled('charge_override_reason')) {
             abort_unless(auth()->user()->hasPermission('deliveries.edit.charge') || auth()->user()->hasPermission('deliveries.edit.cost'), 403);
         }
-        $delivery->update($data);
+
+        DB::transaction(function () use ($delivery, $data) {
+            $wasOwnCompanyDelivered = $delivery->delivery_type === 'own_company' && $delivery->status === 'delivered';
+            $delivery->update($data);
+            $delivery->refresh();
+
+            // This form is often where delivery_type is actually set/confirmed for a
+            // delivery already marked delivered earlier — the fee automation must
+            // apply here too, not only on the main status-update endpoint, or a
+            // delivery completed before its type was confirmed would be stuck at
+            // AED 0 forever with no obvious way to fix it.
+            $isNowOwnCompanyDelivered = $delivery->delivery_type === 'own_company' && $delivery->status === 'delivered';
+            if ($isNowOwnCompanyDelivered && $delivery->driver_id && (!$wasOwnCompanyDelivered || (float) $delivery->driver_fee <= 0)) {
+                app(\App\Services\DeliveryFinanceService::class)->completeOwnDelivery($delivery, $delivery->delivered_at ?? now());
+            }
+        });
+
         return back()->with('success', 'Delivery finance details updated.');
     }
 
@@ -114,6 +130,9 @@ class DeliveryController extends Controller
         $data = $request->validate([
             'status' => 'required|in:pending,out_for_delivery,delivered,partial,failed,returned',
             'driver_id' => 'nullable|exists:users,id',
+            'delivery_type' => 'nullable|in:own_company,domestic_outside_courier,international_courier,customer_pickup',
+            'vehicle_id' => 'nullable|exists:vehicles,id',
+            'courier_supplier_id' => 'nullable|exists:suppliers,id',
             'delivery_date' => 'nullable|date',
             'package_size' => 'required|in:standard,large,pickup',
             'delivery_charge' => 'nullable|numeric|min:0|max:99999',
@@ -164,65 +183,102 @@ class DeliveryController extends Controller
         if ($data['status'] === 'failed' && empty($data['failure_reason'])) {
             return back()->withErrors(['failure_reason' => 'Please record why the delivery failed.'])->withInput();
         }
-
-        DB::transaction(function () use ($delivery, $data, $proofJustUploaded) {
-            $oldStatus = $delivery->status;
-            $oldDriverId = $delivery->driver_id;
-            $oldDeliveryDate = $delivery->delivery_date;
-            $data['last_updated_by'] = auth()->id();
-            $data['delivered_at'] = $data['status'] === 'delivered' ? ($delivery->delivered_at ?: now()) : null;
-            if ($data['status'] === 'failed' && $oldStatus !== 'failed') {
-                $data['attempt_count'] = $delivery->attempt_count + 1;
+        if ($data['status'] === 'delivered') {
+            $effectiveDeliveryType = $data['delivery_type'] ?? $delivery->delivery_type;
+            if (empty($effectiveDeliveryType)) {
+                return back()->withErrors(['delivery_type' => 'Select the delivery provider (Own Driver, Domestic Courier, International Courier, or Customer Pickup) before marking this delivered.'])->withInput();
             }
-            $delivery->update($data);
-            if ($proofJustUploaded) {
-                SalesOrderStatusHistory::create(['sales_order_id' => $delivery->sales_order_id, 'field' => 'proof', 'old_value' => null, 'new_value' => 'Proof-of-delivery photo uploaded', 'changed_by' => auth()->id()]);
-            }
-
-            // Delivery Finance automation: driver fee + daily allowance are applied
-            // the moment an own-company delivery is genuinely marked delivered —
-            // not left for someone to remember to trigger separately. Recalculates
-            // for both the old and new driver/date so a status reversal or driver
-            // reassignment keeps the daily-allowance split correct either way.
-            if ($delivery->delivery_type === 'own_company') {
-                $financeService = app(\App\Services\DeliveryFinanceService::class);
-                if ($delivery->status === 'delivered' && $delivery->driver_id) {
-                    $financeService->completeOwnDelivery($delivery, $delivery->delivery_date ?? now());
-                } elseif ($oldStatus === 'delivered' && $oldDriverId) {
-                    $delivery->update(['driver_fee' => 0]);
-                    $financeService->recalculateDailyAllowanceForDriver($oldDriverId, $oldDeliveryDate ?? now());
+            if ($effectiveDeliveryType === 'own_company') {
+                $effectiveVehicleId = $data['vehicle_id'] ?? $delivery->vehicle_id;
+                if (empty($data['driver_id'] ?? $delivery->driver_id)) {
+                    return back()->withErrors(['driver_id' => 'Select the driver before marking an own-company delivery delivered.'])->withInput();
                 }
-                if ($oldDriverId && $oldDriverId !== $delivery->driver_id) {
-                    $financeService->recalculateDailyAllowanceForDriver($oldDriverId, $oldDeliveryDate ?? now());
+                if (empty($effectiveVehicleId)) {
+                    return back()->withErrors(['vehicle_id' => 'Select the vehicle used before marking an own-company delivery delivered.'])->withInput();
                 }
             }
+        }
 
-            $orderStatus = match ($delivery->status) {
-                'out_for_delivery' => 'out_for_delivery',
-                'delivered' => 'delivered',
-                'failed' => 'failed',
-                'returned' => 'returned',
-                default => 'scheduled',
-            };
-            $orderChanges = [
-                'delivery_status' => $orderStatus,
-                'driver_id' => $delivery->driver_id,
-                'delivery_date' => $delivery->delivery_date,
-            ];
-            foreach ($orderChanges as $field => $value) {
-                $old = $delivery->salesOrder->{$field};
-                if ((string) $old !== (string) $value) {
-                    SalesOrderStatusHistory::create([
-                        'sales_order_id' => $delivery->sales_order_id,
-                        'field' => $field,
-                        'old_value' => $old,
-                        'new_value' => $value ?? '',
-                        'changed_by' => auth()->id(),
-                    ]);
+        try {
+            DB::transaction(function () use ($delivery, $data, $proofJustUploaded) {
+                // Row-locked re-fetch inside the transaction — prevents two concurrent
+                // "mark Delivered" requests for the same delivery from both reading
+                // the same pre-update state and both applying the fee/allowance logic.
+                $delivery = DeliveryNote::lockForUpdate()->findOrFail($delivery->id);
+                $oldStatus = $delivery->status;
+                $oldDriverId = $delivery->driver_id;
+                $oldDeliveredAt = $delivery->delivered_at;
+
+                // A delivery already settled (paid or partially paid) must not have its
+                // status, driver, or vehicle silently changed — that would corrupt
+                // history that's already reflected in a real payment. An explicit
+                // owner override is required, not a routine status update.
+                $isSettled = $delivery->driverSettlement && in_array($delivery->driverSettlement->status, ['paid', 'partially_paid'], true);
+                $isBilled = $delivery->courierBill && in_array($delivery->courierBill->status, ['paid', 'partially_paid'], true);
+                $changingProtectedFields = ($data['status'] ?? $oldStatus) !== $oldStatus
+                    || (array_key_exists('driver_id', $data) && $data['driver_id'] != $oldDriverId);
+                if (($isSettled || $isBilled) && $changingProtectedFields && !auth()->user()->hasPermission('driver-settlements.pay')) {
+                    throw new \RuntimeException('This delivery is already part of a paid settlement/bill. An authorized correction is required to change it — contact an Owner/Admin.');
                 }
-            }
-            $delivery->salesOrder->update($orderChanges);
-        });
+
+                $data['last_updated_by'] = auth()->id();
+                $data['delivered_at'] = $data['status'] === 'delivered' ? ($delivery->delivered_at ?: now()) : null;
+                if ($data['status'] === 'failed' && $oldStatus !== 'failed') {
+                    $data['attempt_count'] = $delivery->attempt_count + 1;
+                }
+                $delivery->update($data);
+                if ($proofJustUploaded) {
+                    SalesOrderStatusHistory::create(['sales_order_id' => $delivery->sales_order_id, 'field' => 'proof', 'old_value' => null, 'new_value' => 'Proof-of-delivery photo uploaded', 'changed_by' => auth()->id()]);
+                }
+
+                // Delivery Finance automation: driver fee + daily allowance are applied
+                // the moment an own-company delivery is genuinely marked delivered —
+                // not left for someone to remember to trigger separately. Grouped by
+                // ACTUAL completion time (delivered_at), never the scheduled
+                // delivery_date. Recalculates for both the old and new driver/date so
+                // a status reversal or driver reassignment keeps the split correct.
+                if ($delivery->delivery_type === 'own_company') {
+                    $financeService = app(\App\Services\DeliveryFinanceService::class);
+                    if ($delivery->status === 'delivered' && $delivery->driver_id) {
+                        $financeService->completeOwnDelivery($delivery, $delivery->delivered_at ?? now());
+                    } elseif ($oldStatus === 'delivered' && $oldDriverId) {
+                        $delivery->update(['driver_fee' => 0]);
+                        $financeService->recalculateDailyAllowanceForDriver($oldDriverId, $oldDeliveredAt ?? now());
+                    }
+                    if ($oldDriverId && $oldDriverId !== $delivery->driver_id) {
+                        $financeService->recalculateDailyAllowanceForDriver($oldDriverId, $oldDeliveredAt ?? now());
+                    }
+                }
+
+                $orderStatus = match ($delivery->status) {
+                    'out_for_delivery' => 'out_for_delivery',
+                    'delivered' => 'delivered',
+                    'failed' => 'failed',
+                    'returned' => 'returned',
+                    default => 'scheduled',
+                };
+                $orderChanges = [
+                    'delivery_status' => $orderStatus,
+                    'driver_id' => $delivery->driver_id,
+                    'delivery_date' => $delivery->delivery_date,
+                ];
+                foreach ($orderChanges as $field => $value) {
+                    $old = $delivery->salesOrder->{$field};
+                    if ((string) $old !== (string) $value) {
+                        SalesOrderStatusHistory::create([
+                            'sales_order_id' => $delivery->sales_order_id,
+                            'field' => $field,
+                            'old_value' => $old,
+                            'new_value' => $value ?? '',
+                            'changed_by' => auth()->id(),
+                        ]);
+                    }
+                }
+                $delivery->salesOrder->update($orderChanges);
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['status' => $exception->getMessage()])->withInput();
+        }
 
         return back()->with('success', 'Delivery updated. Staff schedules will refresh automatically.');
     }

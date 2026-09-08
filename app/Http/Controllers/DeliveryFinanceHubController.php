@@ -25,10 +25,10 @@ class DeliveryFinanceHubController extends Controller
         'own_driver_daily_allowance' => 'Own-Driver Daily Phone/Internet Allowance',
     ];
 
-    public function index(Request $request)
+    public function index(Request $request, \App\Services\DeliveryFinanceService $financeService)
     {
         abort_unless(auth()->user()->hasPermission('deliveries.view.finance'), 403);
-        $tab = $request->query('tab', 'courier-bills');
+        $tab = $request->query('tab', 'daily-deliveries');
 
         // Must match the same "who counts as a driver" rule the Deliveries
         // module itself uses when assigning a driver — otherwise someone
@@ -41,8 +41,35 @@ class DeliveryFinanceHubController extends Controller
         $drivers = User::whereIn('id', $roleBasedDriverIds->merge($assignedDriverIds)->unique())->orderBy('name')->get();
         $vehicles = Vehicle::orderBy('name')->get();
 
+        // Daily Deliveries — every completed delivery, shown immediately
+        // even before any settlement or courier bill exists for it. Full
+        // filter support: date range, driver, vehicle, courier, delivery
+        // type, payment status. Grouped/ordered by ACTUAL completion time.
+        $dailyQuery = DeliveryNote::where('status', 'delivered')->whereNotNull('delivered_at')
+            ->with('customer', 'salesOrder', 'driver', 'courierSupplier', 'vehicle', 'courierBill', 'driverSettlement');
+        if ($request->filled('from_date')) $dailyQuery->whereDate('delivered_at', '>=', $request->query('from_date'));
+        if ($request->filled('to_date')) $dailyQuery->whereDate('delivered_at', '<=', $request->query('to_date'));
+        if ($request->filled('driver_id')) $dailyQuery->where('driver_id', $request->query('driver_id'));
+        if ($request->filled('vehicle_id')) $dailyQuery->where('vehicle_id', $request->query('vehicle_id'));
+        if ($request->filled('courier_supplier_id')) $dailyQuery->where('courier_supplier_id', $request->query('courier_supplier_id'));
+        if ($request->filled('delivery_type')) $dailyQuery->where('delivery_type', $request->query('delivery_type'));
+        if ($request->filled('payment_status')) {
+            $status = $request->query('payment_status');
+            $dailyQuery->where(fn ($q) => match ($status) {
+                'collected' => $q->whereColumn('amount_collected', '>=', 'customer_delivery_charge')->where('customer_delivery_charge', '>', 0),
+                'uncollected' => $q->whereColumn('amount_collected', '<', 'customer_delivery_charge'),
+                default => $q,
+            });
+        }
+        $dailyDeliveries = $dailyQuery->orderByDesc('delivered_at')->paginate(25)->withQueryString();
+        $dailyDeliveries->getCollection()->transform(function ($d) use ($financeService) {
+            $d->setAttribute('computed_profit', $financeService->directProfitLoss($d));
+            return $d;
+        });
+
         return view('deliveries.finance-hub', [
             'tab' => $tab,
+            'dailyDeliveries' => $dailyDeliveries,
             'bills' => CourierBill::with('supplier', 'lines')->latest('bill_date')->limit(20)->get(),
             'settlements' => DriverSettlement::with('driver')->latest('end_date')->limit(20)->get(),
             'vehicleExpenses' => VehicleExpense::with('vehicle', 'driver', 'supplier')->latest('expense_date')->limit(20)->get(),

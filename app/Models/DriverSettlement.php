@@ -7,5 +7,6 @@ class DriverSettlement extends Model {
     public function driver() { return $this->belongsTo(User::class, 'driver_id'); }
     public function deliveries() { return $this->hasMany(DeliveryNote::class, 'driver_settlement_id'); }
     public function dailyAllowances() { return $this->hasMany(DriverDailyAllowance::class); }
+    public function payments() { return $this->hasMany(DriverSettlementPayment::class); }
     public function creator() { return $this->belongsTo(User::class, 'created_by'); }
 }

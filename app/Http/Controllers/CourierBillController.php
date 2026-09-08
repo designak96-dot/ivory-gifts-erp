@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\{CourierBill, DeliveryNote, Supplier};
 use App\Services\{DeliveryFinanceService, ProofUploadService};
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class CourierBillController extends Controller
 {
@@ -79,11 +80,20 @@ class CourierBillController extends Controller
         return view('deliveries.courier-bills.show', ['bill' => $bill->load('supplier', 'lines.delivery.customer')]);
     }
 
-    public function pay(Request $request, CourierBill $bill, DeliveryFinanceService $service)
+    public function pay(Request $request, CourierBill $bill, DeliveryFinanceService $service, ProofUploadService $proofs)
     {
         abort_unless(auth()->user()->hasPermission('courier-bills.pay'), 403);
-        $data = $request->validate(['amount_paid' => 'required|numeric|min:0.01', 'payment_date' => 'required|date', 'payment_method' => 'required|in:cash,bank,card', 'payment_reference' => 'nullable|string|max:100']);
-        $service->payCourierBill($bill, (float) $data['amount_paid'], $data, auth()->id());
+        $data = $request->validate([
+            'amount_paid' => 'required|numeric|min:0.01', 'payment_date' => 'required|date', 'payment_method' => 'required|in:cash,bank,card',
+            'payment_reference' => 'nullable|string|max:100', 'proof' => 'required|file|mimes:jpg,jpeg,png,webp,pdf|max:8192',
+            'idempotency_key' => 'nullable|string|max:100',
+        ]);
+        $stored = $proofs->store($request->file('proof'), 'courier-bill-payment-proofs');
+        // A client-supplied key (e.g. generated once per form-open) is the most
+        // reliable idempotency guard against a real double-submit; falling back
+        // to a fresh one still lets the payment through normally otherwise.
+        $idempotencyKey = $data['idempotency_key'] ?? (string) Str::uuid();
+        $service->payCourierBill($bill, (float) $data['amount_paid'], $data, $idempotencyKey, $stored['proof_path'], $stored['proof_original_name'], auth()->id());
         return back()->with('success', 'Payment recorded — expense posted or updated automatically.');
     }
 
@@ -92,5 +102,18 @@ class CourierBillController extends Controller
         abort_unless(auth()->user()->hasPermission('courier-bills.approve'), 403);
         $bill->update(['status' => $bill->amount_paid > 0 ? $bill->status : 'approved']);
         return back()->with('success', 'Bill approved.');
+    }
+
+    /** The courier's own invoice number often arrives after the bill is
+     * already created and its costs already entered. This links it onto
+     * the SAME bill — never creates a second delivery entry or a new
+     * bill — so profit/loss already reflects the real cost immediately,
+     * even before the supplier's paperwork catches up. */
+    public function linkInvoiceNumber(Request $request, CourierBill $bill)
+    {
+        abort_unless(auth()->user()->hasPermission('courier-bills.manage'), 403);
+        $data = $request->validate(['supplier_invoice_number' => 'required|string|max:100']);
+        $bill->update(['supplier_invoice_number' => $data['supplier_invoice_number']]);
+        return back()->with('success', 'Supplier invoice number linked to this bill.');
     }
 }

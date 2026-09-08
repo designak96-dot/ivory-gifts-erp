@@ -8,6 +8,18 @@
 <div class="stat"><small>Remaining</small><strong class="kpi-bad">AED {{ number_format($bill->remainingAmount(),2) }}</strong></div>
 </div>
 
+<div class="card" style="margin-top:15px">
+<h2>Supplier Invoice Number</h2>
+<p class="muted">{{ $bill->supplier_invoice_number ? 'Linked: '.$bill->supplier_invoice_number : 'Not yet received — costs and profit/loss already reflect the real amount regardless.' }}</p>
+@if(auth()->user()->hasPermission('courier-bills.manage'))
+<form method="post" action="{{ route('courier-bills.link-invoice',$bill) }}" style="display:flex;gap:8px;align-items:end;margin-top:8px">
+@csrf
+<label>Supplier Invoice Number<input name="supplier_invoice_number" value="{{ $bill->supplier_invoice_number }}" required></label>
+<button class="btn small primary">{{ $bill->supplier_invoice_number ? 'Update' : 'Link' }}</button>
+</form>
+@endif
+</div>
+
 <div class="card" style="margin-top:15px"><h2>Delivery Lines ({{ $bill->lines->count() }})</h2>
 <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Delivery</th><th>Customer</th><th>Estimated</th><th>Actual Billed</th><th>Difference</th></tr></thead><tbody>
 @foreach($bill->lines as $l)

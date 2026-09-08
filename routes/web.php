@@ -127,6 +127,7 @@ Route::middleware('installed')->group(function(){
         Route::post('/courier-bills',[CourierBillController::class,'store'])->middleware('permission:courier-bills.manage')->name('courier-bills.store');
         Route::get('/courier-bills/{bill}',[CourierBillController::class,'show'])->middleware('permission:deliveries.view.finance')->name('courier-bills.show');
         Route::post('/courier-bills/{bill}/approve',[CourierBillController::class,'approve'])->middleware('permission:courier-bills.approve')->name('courier-bills.approve');
+        Route::post('/courier-bills/{bill}/link-invoice',[CourierBillController::class,'linkInvoiceNumber'])->middleware('permission:courier-bills.manage')->name('courier-bills.link-invoice');
         Route::post('/courier-bills/{bill}/pay',[CourierBillController::class,'pay'])->middleware('permission:courier-bills.pay')->name('courier-bills.pay');
 
         Route::get('/driver-settlements',[DriverSettlementController::class,'index'])->middleware('permission:deliveries.view.finance')->name('driver-settlements.index');
@@ -134,6 +135,7 @@ Route::middleware('installed')->group(function(){
         Route::post('/driver-settlements',[DriverSettlementController::class,'store'])->middleware('permission:driver-settlements.manage')->name('driver-settlements.store');
         Route::get('/driver-settlements/{settlement}',[DriverSettlementController::class,'show'])->middleware('permission:deliveries.view.finance')->name('driver-settlements.show');
         Route::post('/driver-settlements/{settlement}/pay',[DriverSettlementController::class,'pay'])->middleware('permission:driver-settlements.pay')->name('driver-settlements.pay');
+        Route::get('/driver-settlements-report',[DriverSettlementController::class,'report'])->middleware('permission:deliveries.view.profit')->name('driver-settlements.report');
 
         Route::get('/vehicle-expenses',[VehicleExpenseController::class,'index'])->middleware('permission:deliveries.view.finance')->name('vehicle-expenses.index');
         Route::post('/vehicle-expenses',[VehicleExpenseController::class,'store'])->middleware('permission:vehicle-expenses.manage')->name('vehicle-expenses.store');
@@ -144,6 +146,8 @@ Route::middleware('installed')->group(function(){
         Route::patch('/deliveries/{delivery}/quick-update',[DeliveryController::class,'quickUpdate'])->middleware('permission:deliveries.manage')->name('deliveries.quick-update');
         Route::get('/expenses',[ExpenseController::class,'index'])->middleware('permission:expenses.view')->name('expenses.index');
         Route::post('/expenses',[ExpenseController::class,'store'])->middleware('permission:expenses.manage')->name('expenses.store');
+        Route::get('/expenses/{expense}',[ExpenseController::class,'show'])->middleware('permission:expenses.view')->name('expenses.show');
+        Route::post('/expenses/{expense}/allocate',[ExpenseController::class,'allocate'])->middleware('permission:vehicle-expenses.manage')->name('expenses.allocate');
         Route::get('/expenses/{expense}/proof',[ProofController::class,'expense'])->middleware('permission:expenses.view')->name('expenses.proof');
         Route::get('/expenses/{expense}/invoice',[ProofController::class,'expenseInvoice'])->middleware('permission:expenses.view')->name('expenses.invoice');
         Route::get('/inventory',[InventoryController::class,'index'])->middleware('permission:inventory.view')->name('inventory.index');

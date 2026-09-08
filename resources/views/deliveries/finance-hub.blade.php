@@ -5,15 +5,58 @@
 
 <div class="card">
 <div style="display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:10px" id="finance-tabs">
-<button class="btn small tab-btn active" data-tab="courier-bills">Courier Bills</button>
+<button class="btn small tab-btn active" data-tab="daily-deliveries">Daily Deliveries</button>
+<button class="btn small tab-btn" data-tab="courier-bills">Courier Bills</button>
 <button class="btn small tab-btn" data-tab="settlements">Driver Settlements</button>
 <button class="btn small tab-btn" data-tab="vehicle-expenses">Vehicle Expenses</button>
 <button class="btn small tab-btn" data-tab="drivers">Drivers & Vehicles</button>
 <button class="btn small tab-btn" data-tab="settings">Settings</button>
 </div>
 
+{{-- ================= DAILY DELIVERIES ================= --}}
+<div class="tab-pane" data-pane="daily-deliveries" style="margin-top:15px">
+<form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+<input type="hidden" name="tab" value="daily-deliveries">
+<label>From<input type="date" name="from_date" value="{{ request('from_date') }}"></label>
+<label>To<input type="date" name="to_date" value="{{ request('to_date') }}"></label>
+<label>Driver<select name="driver_id"><option value="">All</option>@foreach($drivers as $d)<option value="{{ $d->id }}" @selected(request('driver_id')==$d->id)>{{ $d->name }}</option>@endforeach</select></label>
+<label>Vehicle<select name="vehicle_id"><option value="">All</option>@foreach($vehicles as $v)<option value="{{ $v->id }}" @selected(request('vehicle_id')==$v->id)>{{ $v->name }}</option>@endforeach</select></label>
+<label>Type<select name="delivery_type"><option value="">All</option><option value="own_company" @selected(request('delivery_type')=='own_company')>Own Company</option><option value="domestic_outside_courier" @selected(request('delivery_type')=='domestic_outside_courier')>Domestic Courier</option><option value="international_courier" @selected(request('delivery_type')=='international_courier')>International</option><option value="customer_pickup" @selected(request('delivery_type')=='customer_pickup')>Pickup</option></select></label>
+<label>Charge<select name="payment_status"><option value="">All</option><option value="collected" @selected(request('payment_status')=='collected')>Collected</option><option value="uncollected" @selected(request('payment_status')=='uncollected')>Uncollected</option></select></label>
+<button class="btn">Filter</button>
+</form>
+
+<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Completed</th><th>Order</th><th>Customer</th><th>Provider</th><th>Charge</th><th>Collected</th><th>Est. Cost</th><th>Actual Cost</th><th>Profit/Loss</th><th>Status</th></tr></thead><tbody>
+@forelse($dailyDeliveries as $d)
+@php($profit = $d->computed_profit)
+<tr>
+<td>{{ $d->delivered_at?->format('d M Y H:i') }}</td>
+<td><a href="{{ route('deliveries.show',$d) }}">{{ $d->salesOrder?->order_number }}</a></td>
+<td>{{ $d->customer->name }}</td>
+<td>
+@if($d->delivery_type==='own_company'){{ $d->driver?->name?:'—' }} @if($d->vehicle) / {{ $d->vehicle->name }} @endif
+@elseif(in_array($d->delivery_type,['domestic_outside_courier','international_courier'])){{ $d->courierSupplier?->name?:'—' }}
+@else Pickup @endif
+</td>
+<td class="amount">AED {{ number_format($d->customer_delivery_charge,2) }}</td>
+<td class="amount kpi-good">AED {{ number_format($d->amount_collected,2) }}</td>
+<td class="amount">AED {{ number_format($d->estimated_cost,2) }}</td>
+<td class="amount">{{ $d->actual_cost!==null ? 'AED '.number_format($d->actual_cost,2) : '—' }}</td>
+<td class="amount {{ $profit['profit_loss']>=0?'kpi-good':'kpi-bad' }}"><b>AED {{ number_format($profit['profit_loss'],2) }}</b> @if(!$profit['is_final'])<span class="badge amber">Est.</span>@endif</td>
+<td>
+@if($d->courierBill)<span class="badge {{ $d->courierBill->status==='paid'?'green':'amber' }}">Bill: {{ ucfirst(str_replace('_',' ',$d->courierBill->status)) }}</span>
+@elseif($d->driverSettlement)<span class="badge {{ $d->driverSettlement->status==='paid'?'green':'amber' }}">Settled: {{ ucfirst(str_replace('_',' ',$d->driverSettlement->status)) }}</span>
+@elseif(in_array($d->delivery_type,['domestic_outside_courier','international_courier']))<span class="badge red">Unbilled</span>
+@else<span class="badge amber">Unsettled</span>@endif
+</td>
+</tr>
+@empty<tr><td colspan="10" class="empty">No completed deliveries match these filters yet.</td></tr>
+@endforelse
+</tbody></table></div>{{ $dailyDeliveries->links() }}
+</div>
+
 {{-- ================= COURIER BILLS ================= --}}
-<div class="tab-pane" data-pane="courier-bills" style="margin-top:15px">
+<div class="tab-pane" data-pane="courier-bills" style="margin-top:15px;display:none">
 @if(auth()->user()->hasPermission('courier-bills.manage'))
 <details><summary class="btn small primary">+ New Courier Bill</summary>
 <form method="post" action="{{ route('courier-bills.store') }}" enctype="multipart/form-data" style="margin-top:12px">
