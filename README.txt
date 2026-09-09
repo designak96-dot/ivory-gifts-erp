@@ -1,24 +1,48 @@
-IVORY GIFTS — EXACT SITES LIQUID-GLASS THEME
+IVORY GIFTS - READY AND DELIVERED EMOJIS
+Built from main 7c9ef64d6e7d6cc956341dbd044a34becf050c90, verified 8 Sep 2026.
 
-Based on GitHub main commit:
-9ce5d42c5c197638acdc46fa1da1f44b5e208cda
+Upload whatsapp-emoji-both.zip to /home/ivorygif/ivory-accounts, then:
+cd /home/ivorygif/ivory-accounts
+unzip -o whatsapp-emoji-both.zip -d .
+PHP_BIN=/opt/alt/php85/usr/bin/php bash install-whatsapp-emoji.sh
 
-Reference design:
-https://ivory-gifts-colorful-glass.milanamuratova98.chatgpt.site/
+Hard refresh the ERP with Ctrl+F5. Both Ready and Delivered now use browser
+codepoint emojis, bilingual wording, blank lines, bold, and one secure link.
+Direct Web opening, same named window and Copy fallback are unchanged.
+Delivered emoji addition is now expressly authorized by the user.
+No theme, database, automation or phone-normalization changes.
 
-INSTALL
-1. Upload this ZIP to /home/ivorygif/ivory-accounts
-2. Run:
+Installer backs up layout, existing partial and existing CLAUDE.md under
+storage/app/whatsapp-backups/<timestamp-random>/ before changing them.
+It adds the WhatsApp include if absent without replacing your theme/layout.
+It appends preservation guidance to CLAUDE.md without deleting existing text.
+Rollback: restore those files from the printed backup folder and clear views.
+If CLAUDE.md did not exist before, remove only the added marked section.
 
-   cd /home/ivorygif/ivory-accounts
-   unzip -o ivory-gifts-exact-sites-liquid-glass-theme-final-cpanel.zip -d .
-   bash install-theme.sh
+FUTURE CLAUDE UPDATES
+The ZIP includes a contract and standalone regression test under
+whatsapp-emoji-payload. Run from the ERP root or source checkout:
+node whatsapp-emoji-payload/whatsapp-regression.mjs
+This is a development check; Node is not needed for installation.
 
-3. Press Ctrl+F5 in the browser.
+Important: this installer does not push to GitHub. Merge the fixed partial,
+layout include, CLAUDE.md guidance and whatsapp-emoji-payload contract/test
+into GitHub main before asking Claude to build future updates from main.
+Attach this ZIP to Claude and say:
+"First integrate the WhatsApp fix in this ZIP into the latest main. Preserve
+both Ready and Delivered emojis and the direct Web single-window behavior.
+Read CLAUDE.md and whatsapp-emoji-payload/PRESERVE-WHATSAPP.md. Run
+node whatsapp-emoji-payload/whatsapp-regression.mjs before delivering updates.
+Do not change or replace these features unless I explicitly ask."
 
-SCOPE
-- Replaces the five complete ERP CSS sources and their compiled copies.
-- Includes dark and light liquid-glass themes.
-- Preserves all existing layout, positions, responsive behavior and print behavior.
-- Does not contain or change PHP, Blade, JavaScript, routes, database data or automations.
-- Creates a timestamped backup before installation.
+Protection consists of source guidance and executable regression checks,
+not a technical lock against arbitrary file overwrites. For enforcement,
+run the test in CI and require it to pass before deployment.
+
+VERIFICATION
+Browser-mocked tests executed the actual handler for A/B/C in both statuses:
+all 6 emojis survive one URL decode, no replacement characters, exact wording,
+newlines, bold, one secure link, one named tab, invoice/proof gates and blocked
+popup fallback. No live WhatsApp message sent. PHP installer not run locally.
+WhatsApp Web must be signed in. Browsers cannot reliably discover unrelated
+WhatsApp tabs or installed apps; reload/isolation can affect window reuse.
