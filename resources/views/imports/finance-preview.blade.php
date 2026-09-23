@@ -7,7 +7,7 @@
 @endif
 
 <div class="card" style="margin-top:12px">
-<h2>Preview — {{ $typeLabel }}</h2>
+<h2>Preview — {{ $typeLabel }}@if(!empty($preview['sheet_month'])) — {{ \Carbon\Carbon::parse($preview['sheet_month'].'-01')->format('F Y') }}@endif</h2>
 <div class="grid cols-4" style="margin-top:15px">
 <div class="stat"><small>Total Source Rows</small><strong>{{ $preview['total_rows'] }}</strong></div>
 <div class="stat"><small>Purchase/Invoice Groups</small><strong>{{ $preview['material_purchase_groups'] }}</strong></div>

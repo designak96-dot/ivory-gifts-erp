@@ -27,7 +27,11 @@ class FinanceMigrationImportController extends Controller
 
     private function resolveRows(Request $request): array
     {
-        $request->validate(['type' => 'required|in:'.implode(',', array_keys(self::TYPES)), 'file' => 'required|file|max:20480']);
+        $request->validate([
+            'type' => 'required|in:'.implode(',', array_keys(self::TYPES)),
+            'file' => 'required|file|max:20480',
+            'sheet_month' => 'required|date_format:Y-m',
+        ], ['sheet_month.required' => 'Choose the month this sheet belongs to.']);
         $file = $request->file('file');
         $extension = $file->getClientOriginalExtension();
         $hash = $this->parser->fileHash($file->getRealPath());
@@ -45,7 +49,18 @@ class FinanceMigrationImportController extends Controller
         $rows = $this->resolveRows($request);
         $type = $request->input('type');
 
+        // Dates are fixed up once here; the SAME rows go to preview and
+        // (via the session) to commit, so both always agree.
+        $sheetMonth = $request->input('sheet_month');
+        [$rows, $monthWarnings, $monthErrors] = $this->service->applySheetMonth($rows, $sheetMonth);
         $preview = $this->service->preview($rows);
+        $preview['warnings'] = array_merge($monthWarnings, $preview['warnings']);
+        $preview['fatal_errors'] = array_merge($monthErrors, $preview['fatal_errors']);
+        if ($wrongSheet = $this->service->detectWrongSheet($rows)) {
+            array_unshift($preview['fatal_errors'], $wrongSheet);
+        }
+        $preview['can_commit'] = count($preview['fatal_errors']) === 0;
+        $preview['sheet_month'] = $sheetMonth;
 
         // Distinct, unrecognized payment method values in the source data — the
         // user must map each one before commit; never silently defaulted to Cash.
@@ -53,7 +68,7 @@ class FinanceMigrationImportController extends Controller
         $sourceValues = collect($rows)->map(fn ($r) => strtolower(trim((string) ($r['payment method'] ?? $r['payment_method'] ?? ''))))->filter()->unique()->values();
         $unmappedMethods = $sourceValues->reject(fn ($v) => in_array($v, $recognized, true))->all();
 
-        session(['finance_rows' => $rows, 'finance_type' => $type]);
+        session(['finance_rows' => $rows, 'finance_type' => $type, 'finance_sheet_month' => $sheetMonth]);
 
         return view('imports.finance-preview', ['preview' => $preview, 'type' => $type, 'typeLabel' => self::TYPES[$type] ?? $type, 'unmappedMethods' => $unmappedMethods, 'duplicateWarning' => session('finance_duplicate_warning')]);
     }
@@ -92,7 +107,7 @@ class FinanceMigrationImportController extends Controller
 
         if (!$isDryRun) {
             $import->update(['file_hash' => session('finance_file_hash'), 'original_filename' => session('finance_original_filename')]);
-            session()->forget(['finance_rows', 'finance_type', 'finance_file_hash', 'finance_original_filename', 'finance_duplicate_warning']);
+            session()->forget(['finance_rows', 'finance_type', 'finance_sheet_month', 'finance_file_hash', 'finance_original_filename', 'finance_duplicate_warning']);
         }
 
         return redirect()->route('imports.history')->with('success', ($isDryRun ? 'Dry run' : 'Import').": {$import->created_count} created, {$import->skipped_count} skipped, {$import->error_count} errors.");

@@ -26,7 +26,8 @@ class DataImportController extends Controller
         $request->validate([
             'type' => 'required|in:customers,orders,current_orders',
             'file' => 'required|file|max:20480',
-        ]);
+            'sheet_month' => 'nullable|required_if:type,orders|date_format:Y-m',
+        ], ['sheet_month.required_if' => 'Choose the month this order sheet belongs to (order numbers restart every month).']);
         $file = $request->file('file');
         $extension = $file->getClientOriginalExtension();
         $hash = $this->service->fileHash($file->getRealPath());
@@ -54,10 +55,10 @@ class DataImportController extends Controller
         $preview = match ($type) {
             'customers' => $this->service->previewCustomers($rows),
             'current_orders' => $this->service->previewCurrentOrders($rows),
-            default => $this->service->previewOrders($rows),
+            default => $this->service->previewOrders($rows, $request->input('sheet_month')),
         };
 
-        session(['import_rows' => $rows, 'import_type' => $type]);
+        session(['import_rows' => $rows, 'import_type' => $type, 'import_sheet_month' => $request->input('sheet_month')]);
 
         return view('imports.preview', ['preview' => $preview, 'type' => $type, 'duplicateWarning' => session('import_duplicate_warning')]);
     }
@@ -81,12 +82,12 @@ class DataImportController extends Controller
         $import = match ($type) {
             'customers' => $this->service->commitCustomers($rows, auth()->id(), $isDryRun),
             'current_orders' => $this->service->commitCurrentOrders($rows, auth()->id(), $isDryRun, $workflow, $simpleWorkflow),
-            default => $this->service->commitOrders($rows, auth()->id(), $isDryRun, $workflow),
+            default => $this->service->commitOrders($rows, auth()->id(), $isDryRun, $workflow, session('import_sheet_month')),
         };
 
         if (!$isDryRun) {
             $import->update(['file_hash' => session('import_file_hash'), 'original_filename' => session('import_original_filename')]);
-            session()->forget(['import_rows', 'import_type', 'import_file_hash', 'import_original_filename', 'import_duplicate_warning']);
+            session()->forget(['import_rows', 'import_type', 'import_sheet_month', 'import_file_hash', 'import_original_filename', 'import_duplicate_warning']);
         }
 
         return redirect()->route('imports.history')->with('success', ($isDryRun ? 'Dry run' : 'Import').": {$import->created_count} created, {$import->updated_count} updated, {$import->conflict_count} conflicts (not overwritten), {$import->skipped_count} skipped, {$import->error_count} errors.");
@@ -94,13 +95,13 @@ class DataImportController extends Controller
 
     public function errorReport(DataImport $import)
     {
-        abort_unless($import->error_count > 0 || $import->conflict_count > 0, 404);
+        abort_unless($import->error_count > 0 || $import->conflict_count > 0 || $import->skipped_count > 0, 404);
         $name = "import-{$import->id}-issues.csv";
         return response()->streamDownload(function () use ($import) {
             $out = fopen('php://output', 'w');
             fputs($out, "\xEF\xBB\xBF");
             fputcsv($out, ['Source ID', 'Label', 'Outcome', 'Message']);
-            $import->rows()->whereIn('outcome', ['error', 'conflict'])->each(fn ($row) => fputcsv($out, [$row->source_id, $row->label, $row->outcome, $row->message]));
+            $import->rows()->whereIn('outcome', ['error', 'conflict', 'skipped'])->each(fn ($row) => fputcsv($out, [$row->source_id, $row->label, $row->outcome, $row->message]));
             fclose($out);
         }, $name, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }

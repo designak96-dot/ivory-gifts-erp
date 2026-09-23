@@ -129,6 +129,68 @@ class FinanceMigrationImportService
         return false;
     }
 
+    /**
+     * Prepares a finance sheet for one month (Y-m) before preview and
+     * commit, so both see exactly the same rows:
+     *  - blank date  → 1st of the chosen month (never today's date);
+     *  - "15/08/2026", "15 Aug", "2026-08-15" → stored as 2026-08-15
+     *    (slash dates are read day-first, the UAE way);
+     *  - a date outside the chosen month is kept, but flagged;
+     *  - a date that can't be read is a fatal error, not a guess.
+     * Returns [rows, warnings, fatal errors].
+     */
+    public function applySheetMonth(array $rows, ?string $sheetMonth): array
+    {
+        if (!$sheetMonth || !preg_match('/^\d{4}-\d{2}$/', $sheetMonth)) {
+            return [$rows, [], []];
+        }
+        $month = \Carbon\Carbon::createFromFormat('Y-m-d', $sheetMonth.'-01')->startOfDay();
+        $dates = app(DataImportService::class);
+        $warnings = [];
+        $fatal = [];
+        $filled = 0;
+        $outside = [];
+
+        foreach ($rows as $i => $row) {
+            $raw = trim((string) ($row['date'] ?? ''));
+            if ($raw === '') {
+                $rows[$i]['date'] = $month->toDateString();
+                $filled++;
+                continue;
+            }
+            $parsed = $dates->parseLooseDate($raw, $month);
+            if (!$parsed && preg_match('/^\d{5}$/', $raw)) {
+                $parsed = \Carbon\Carbon::create(1899, 12, 30)->addDays((int) $raw); // Excel serial date
+            }
+            if (!$parsed) {
+                $fatal[] = 'Row '.($i + 1).": date \"{$raw}\" could not be read — use YYYY-MM-DD, e.g. ".$month->format('Y-m').'-15.';
+                continue;
+            }
+            $rows[$i]['date'] = $parsed->toDateString();
+            if ($parsed->format('Y-m') !== $month->format('Y-m')) {
+                $outside[] = ($i + 1).' ('.$parsed->format('d M Y').')';
+            }
+        }
+
+        if ($filled) {
+            $warnings[] = "{$filled} row(s) had no date — dated ".$month->format('j M Y').'.';
+        }
+        if ($outside) {
+            $warnings[] = 'Dated outside '.$month->format('F Y').', kept as written — rows '.implode(', ', array_slice($outside, 0, 15)).(count($outside) > 15 ? ' and '.(count($outside) - 15).' more' : '').'.';
+        }
+        return [$rows, $warnings, $fatal];
+    }
+
+    /** Stops an order sheet from being posted as purchases/expenses by mistake. */
+    public function detectWrongSheet(array $rows): ?string
+    {
+        $keys = array_keys($rows[0] ?? []);
+        if (in_array('source_order_number', $keys, true) || (in_array('item_description', $keys, true) && in_array('customer_phone', $keys, true))) {
+            return 'This file looks like an ORDER sheet (it has order number / customer / item columns), not a finance sheet. Import it under Imports → Historical orders instead.';
+        }
+        return null;
+    }
+
     // ---------------------------------------------------------------
     // Preview — classifies every row without writing anything.
     // ---------------------------------------------------------------
@@ -408,7 +470,7 @@ class FinanceMigrationImportService
                         'amount_ex_tax' => $reconciled['amount_ex_tax'], 'tax_amount' => $reconciled['tax_amount'], 'total_amount' => $reconciled['total_amount'],
                         'payment_method' => $paymentMethod, 'reference' => $row['invoice no'] ?? $row['invoice_no'] ?? null,
                         'remarks' => $row['remarks'] ?? null, 'proof_missing' => $proofMissing,
-                        'source_sheet' => 'finance_migration', 'source_row' => $row['invoice no'] ?? null,
+                        'source_sheet' => 'finance_migration', 'source_row' => $row['invoice no'] ?? $row['invoice_no'] ?? null,
                         'import_batch_id' => $import->id, 'created_by' => auth()->id(),
                     ]);
 

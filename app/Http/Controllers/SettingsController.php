@@ -63,4 +63,27 @@ class SettingsController extends Controller
         $this->branding->removeSignature();
         return back()->with('success', 'Signature removed.');
     }
+
+    /**
+     * Restores the "Reset All Trial Data, Keep Only Products" action.
+     * The Service (DataResetService), the Artisan command, and this route
+     * were all already present and already wired together — only this
+     * controller method itself was missing, which would have thrown a
+     * fatal "method does not exist" error if the route were ever hit.
+     * Requires typing the exact confirmation phrase, matching this
+     * feature's original design; the permission check on the route plus
+     * this explicit typed confirmation are the two safety gates before
+     * anything destructive happens.
+     */
+    public function resetToProductsOnly(Request $request, \App\Services\DataResetService $resetService)
+    {
+        $request->validate(['confirmation' => 'required|string']);
+        if ($request->input('confirmation') !== 'DELETE ALL DATA') {
+            return back()->withErrors(['confirmation' => 'Type DELETE ALL DATA exactly to confirm — nothing was changed.']);
+        }
+
+        $result = $resetService->resetToProductsOnly(auth()->id());
+
+        return back()->with('success', "Done — every trial record was deleted. {$result['products_preserved']} products were preserved.");
+    }
 }
