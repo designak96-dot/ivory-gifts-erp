@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 class ExpenseController extends Controller
 {
-    public function index(){return view('expenses.index',['expenses'=>Expense::latest('expense_date')->paginate(25),'vehicles'=>Vehicle::orderBy('name')->get()]);}
+    public function index(){$q=Expense::latest('expense_date');$monthTotal=null;if(preg_match('/^\d{4}-\d{2}$/',(string)request('month'))){$m=\Carbon\Carbon::createFromFormat('Y-m-d',request('month').'-01');$q->whereBetween('expense_date',[$m->copy()->startOfMonth(),$m->copy()->endOfMonth()]);$monthTotal=(clone $q)->sum('total_amount');}return view('expenses.index',['expenses'=>$q->paginate(25)->withQueryString(),'vehicles'=>Vehicle::orderBy('name')->get(),'monthTotal'=>$monthTotal]);}
     public function store(Request $r,NumberingService $n,AccountingService $accounting,ProofUploadService $proofs){
         $d=$r->validate([
             'expense_date'=>'required|date','category'=>'required|string|max:100','payee'=>'nullable|string|max:190','payment_method'=>'required|in:cash,bank,card','amount_ex_tax'=>'required|numeric|min:0.01','tax_amount'=>'nullable|numeric|min:0','reference'=>'nullable|string|max:100','description'=>'nullable|string','proof'=>'required|file|mimes:jpg,jpeg,png,webp,pdf|max:8192','invoice'=>'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:8192',

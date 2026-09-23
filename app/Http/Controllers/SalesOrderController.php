@@ -27,7 +27,7 @@ class SalesOrderController extends Controller
                 ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%")));
         }
         if (request('month')) {
-            $month = \Carbon\Carbon::createFromFormat('Y-m', request('month'));
+            $month = \Carbon\Carbon::createFromFormat('Y-m-d', request('month').'-01');
             $query->whereDate('order_month', $month->startOfMonth());
         }
         if (request('delivery_status')) $query->where('delivery_status', request('delivery_status'));

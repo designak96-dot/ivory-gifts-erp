@@ -30,7 +30,7 @@ class DashboardController extends Controller
         $stats = [
             'orders' => (clone $orders)->count(),
             'sales' => (clone $orders)->sum('grand_total'),
-            'unpaid' => Invoice::where('outstanding_amount', '>', 0)->sum('outstanding_amount'),
+            'unpaid' => Invoice::where('outstanding_amount', '>', 0)->where('status', '!=', 'cancelled')->sum('outstanding_amount'),
             'customers' => Customer::count(),
             'due_today' => DeliveryNote::whereDate('delivery_date', today())->where('status', '!=', 'delivered')->count(),
             'production' => ProductionJob::whereNotIn('stage', ['completed', 'cancelled'])->count(),

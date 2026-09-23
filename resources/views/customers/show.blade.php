@@ -13,7 +13,7 @@
 <div class="stat"><small>First order</small><strong>{{ $lifetimeValue['first_order']?->format('d M Y')??'—' }}</strong></div>
 <div class="stat"><small>Last order</small><strong>{{ $lifetimeValue['last_order']?->format('d M Y')??'—' }}</strong></div>
 <div class="stat"><small>Order frequency</small><strong>{{ $lifetimeValue['order_frequency_days']!==null ? 'Every '.$lifetimeValue['order_frequency_days'].' days' : '—' }}</strong></div>
-<div class="stat"><small>Outstanding amount</small><strong class="kpi-bad">AED {{ number_format($lifetimeValue['outstanding_amount'],2) }}</strong></div>
+<div class="stat"><small>Outstanding amount</small><strong class="{{ (float)$lifetimeValue['outstanding_amount']>0?'kpi-bad':'kpi-good' }}">AED {{ number_format($lifetimeValue['outstanding_amount'],2) }}</strong></div>
 </div>
 </div>
 <div class="card" style="margin-top:18px"><div class="card-header"><h2>Tags</h2></div>

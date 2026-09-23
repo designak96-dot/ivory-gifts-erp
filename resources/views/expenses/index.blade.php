@@ -2,6 +2,7 @@
 @section('title','Expenses')
 @section('subtitle','Operating expenses post directly to the general ledger')
 @section('content')
+@if($monthTotal !== null)@include('partials._drilldown-banner',['label'=>'Expenses for '.\Carbon\Carbon::parse(request('month').'-01')->format('F Y').' · AED '.number_format($monthTotal,2),'clearUrl'=>route('expenses.index')])@endif
 @if(auth()->user()->hasPermission('expenses.manage'))
 <form method="post" action="{{ route('expenses.store') }}" enctype="multipart/form-data" class="card">
 @csrf

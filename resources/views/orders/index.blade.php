@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title','Sales Orders')
 @section('subtitle','Create, edit and track all commercial orders')
-@section('content')
+@section('content')@if(request('month'))@include('partials._drilldown-banner',['label'=>'Orders for '.\Carbon\Carbon::createFromFormat('Y-m-d',request('month').'-01')->format('F Y'),'clearUrl'=>route('orders.index')])@endif
 @include('partials._saved-filters', ['page' => 'orders'])
 <div class="toolbar"><form><input name="q" value="{{ request('q') }}" placeholder="Order, customer or phone"><input type="month" name="month" value="{{ request('month') }}"><select name="delivery_status"><option value="">All delivery statuses</option>@foreach(['not_scheduled','scheduled','out_for_delivery','delivered','failed','returned'] as $status)<option value="{{ $status }}" @selected(request('delivery_status')===$status)>{{ str($status)->replace('_',' ')->title() }}</option>@endforeach</select><label class="check"><input type="checkbox" name="show_legacy" value="1" @checked(request()->boolean('show_legacy'))>Include imported delivery history</label><button class="btn">Filter</button></form>@if(auth()->user()->hasPermission('orders.manage'))<a class="btn primary" href="{{ route('orders.create') }}">+ New sales order</a>@endif</div>
 @if(request()->query())<form method="post" action="{{ route('saved-filters.store') }}" style="margin-bottom:15px">@csrf<input type="hidden" name="page" value="orders">@foreach(request()->query() as $k=>$v)<input type="hidden" name="params[{{ $k }}]" value="{{ $v }}">@endforeach<input name="name" placeholder="Save this filter as..." style="width:220px;display:inline-block"><button class="btn small">Save filter</button></form>@endif
