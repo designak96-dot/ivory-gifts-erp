@@ -91,6 +91,16 @@ class FinanceMigrationImportController extends Controller
         $type = session('finance_type');
         abort_unless($rows !== null, 419, 'Preview session expired — please re-upload the file.');
 
+        // A hidden confirm button is not a validation boundary. Recheck
+        // cached rows for both dry runs and real imports before writing.
+        $errors = $this->service->preview($rows)['fatal_errors'];
+        if ($wrongSheet = $this->service->detectWrongSheet($rows)) {
+            $errors[] = $wrongSheet;
+        }
+        if ($errors) {
+            return back()->withErrors(['file' => implode(' ', $errors)]);
+        }
+
         $paymentMap = [];
         foreach ((array) $request->input('payment_method_map', []) as $sourceValue => $mapped) {
             $paymentMap[strtolower(trim($sourceValue))] = $mapped;
