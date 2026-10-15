@@ -67,12 +67,42 @@ class FinanceMigrationImportService
         return strtolower(trim(preg_replace('/\s+/', ' ', $name)));
     }
 
-    /** A CSV-parsed empty cell is an empty string, not null — treat it the same as genuinely missing, never as an explicit zero. */
-    private function readOptionalFloat($value): ?float
+    /** Read AED-formatted cells without PHP's silent "AED 50" -> 0 / "1,200" -> 1 casts. */
+    private function readMoney($value, string $field, bool $optional = false): ?float
     {
-        if ($value === null) return null;
-        $trimmed = trim((string) $value);
-        return $trimmed === '' ? null : (float) $trimmed;
+        $text = trim(str_replace(["\u{00A0}", "\u{202F}"], ' ', (string) $value));
+        if ($text === '') {
+            if ($optional) return null;
+            throw new \InvalidArgumentException("Missing {$field}.");
+        }
+
+        // Accept only a known AED label at either end, then validate the
+        // entire number. Unknown text and ambiguous decimal commas must
+        // be corrected in the source, never silently converted to zero.
+        $currency = '(?:AED|Dhs?\.?|د\.?إ\.?)';
+        $text = trim(preg_replace('/^'.$currency.'\s*|\s*'.$currency.'$/iu', '', $text));
+        $text = preg_replace('/(?<=\d) +(?=\d)/', ',', $text);
+        if (!preg_match('/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/D', $text)) {
+            throw new \InvalidArgumentException("Invalid {$field}: \"{$value}\". Use an AED amount such as 1234.50 or AED 1,234.50.");
+        }
+        $amount = (float) str_replace(',', '', $text);
+        if (!is_finite($amount)) {
+            throw new \InvalidArgumentException("Invalid {$field}: amount is too large.");
+        }
+        return $amount;
+    }
+
+    /** Preview, dry run and commit use the same validated amounts. */
+    private function rowAmounts(array $row): array
+    {
+        $amount = $this->readMoney($row['amount'] ?? null, 'Amount');
+        $total = $this->readMoney($row['total_amount + tax'] ?? $row['total_amount_tax'] ?? null, 'Total Amount + Tax', optional: true);
+        $category = trim((string) ($row['expense_category'] ?? $row['category'] ?? ''));
+        if ($this->categoryMatches($category, self::SALARY_CATEGORY_ALIASES)) {
+            // Salary VAT policy is identical in preview and commit.
+            return ['amount_ex_tax' => round($amount, 2), 'tax_amount' => 0.0, 'total_amount' => round($amount, 2), 'warning' => null];
+        }
+        return $this->reconcileAmounts($amount, $total);
     }
 
     /** Same empty-string-vs-null distinction for text fields — an empty payee cell must fall through to the supplier column, not "win" with a blank value. */
@@ -202,21 +232,17 @@ class FinanceMigrationImportService
         $newSuppliers = [];
         $existingSuppliers = [];
         $totalExTax = 0.0;
-        $totalTax = 0.0;
         $warnings = [];
         $fatalErrors = [];
 
         foreach ($rows as $i => $row) {
             $category = trim((string) ($row['expense_category'] ?? $row['category'] ?? ''));
-            $amount = $row['amount'] ?? null;
-            $totalTax = $this->readOptionalFloat($row['total_amount + tax'] ?? $row['total_amount_tax'] ?? null);
-
-            if ($amount === null || $amount === '') {
-                $fatalErrors[] = "Row ".($i + 1).": missing Amount.";
+            try {
+                $reconciled = $this->rowAmounts($row);
+            } catch (\InvalidArgumentException $e) {
+                $fatalErrors[] = 'Row '.($i + 1).': '.$e->getMessage();
                 continue;
             }
-
-            $reconciled = $this->reconcileAmounts((float) $amount, $totalTax !== null ? (float) $totalTax : null);
             if ($reconciled['warning']) {
                 $warnings[] = "Row ".($i + 1).": {$reconciled['warning']}";
             }
@@ -298,6 +324,9 @@ class FinanceMigrationImportService
                     continue;
                 }
 
+                foreach ($lines as $line) {
+                    $this->rowAmounts($line);
+                }
                 if ($isDryRun) {
                     $created++;
                     DataImportRow::create(['data_import_id' => $import->id, 'source_id' => $invoiceNo, 'label' => $supplierRaw, 'outcome' => 'created', 'message' => 'Dry run — validated only.']);
@@ -314,9 +343,7 @@ class FinanceMigrationImportService
                     $taxTotal = 0.0;
                     $lineData = [];
                     foreach ($lines as $line) {
-                        $amount = (float) ($line['amount'] ?? 0);
-                        $totalTax = isset($line['total_amount + tax']) ? (float) $line['total_amount + tax'] : (isset($line['total_amount_tax']) ? (float) $line['total_amount_tax'] : null);
-                        $reconciled = $this->reconcileAmounts($amount, $totalTax);
+                        $reconciled = $this->rowAmounts($line);
                         $subtotal += $reconciled['amount_ex_tax'];
                         $taxTotal += $reconciled['tax_amount'];
                         $materialName = trim((string) ($line['description'] ?? $line['category'] ?? 'Imported material'));
@@ -375,29 +402,17 @@ class FinanceMigrationImportService
             if ($this->categoryMatches($category, self::MATERIAL_PURCHASE_CATEGORY_ALIASES)) {
                 continue; // handled by commitMaterialPurchases
             }
-            $amount = $row['amount'] ?? null;
-            if ($amount === null || $amount === '') {
-                $skipped++;
-                DataImportRow::create(['data_import_id' => $import->id, 'label' => $category ?: null, 'outcome' => 'skipped', 'message' => "Row ".($i + 1).": missing Amount."]);
-                continue;
-            }
-
             try {
+                $reconciled = $this->rowAmounts($row);
                 if ($isDryRun) {
                     $created++;
                     DataImportRow::create(['data_import_id' => $import->id, 'label' => $category, 'outcome' => 'created', 'message' => 'Dry run — validated only.']);
                     continue;
                 }
 
-                DB::transaction(function () use ($row, $category, $paymentMethodMap, $import, &$created) {
-                    $totalTax = $this->readOptionalFloat($row['total_amount + tax'] ?? $row['total_amount_tax'] ?? null);
+                DB::transaction(function () use ($row, $category, $paymentMethodMap, $import, $reconciled, &$created) {
                     $isSalary = $this->categoryMatches($category, self::SALARY_CATEGORY_ALIASES);
                     $isRent = $this->categoryMatches($category, self::RENT_CATEGORY_ALIASES);
-                    // Salaries never carry VAT, regardless of the source figures.
-                    $reconciled = $isSalary
-                        ? ['amount_ex_tax' => round((float) $row['amount'], 2), 'tax_amount' => 0.0, 'total_amount' => round((float) $row['amount'], 2)]
-                        : $this->reconcileAmounts((float) $row['amount'], $totalTax);
-
                     $date = !empty($row['date']) ? \Carbon\Carbon::parse($row['date']) : now();
                     $payee = $this->readOptionalString($row['payee'] ?? null, $row['supplier'] ?? null) ?? '';
                     $description = trim((string) ($row['description'] ?? $category));
@@ -441,23 +456,15 @@ class FinanceMigrationImportService
         $created = $skipped = $errors = 0;
 
         foreach ($rows as $i => $row) {
-            $amount = $row['amount'] ?? null;
-            if ($amount === null || $amount === '') {
-                $skipped++;
-                DataImportRow::create(['data_import_id' => $import->id, 'outcome' => 'skipped', 'message' => "Row ".($i + 1).": missing Amount."]);
-                continue;
-            }
-
             try {
+                $reconciled = $this->rowAmounts($row);
                 if ($isDryRun) {
                     $created++;
                     DataImportRow::create(['data_import_id' => $import->id, 'outcome' => 'created', 'message' => 'Dry run — validated only.']);
                     continue;
                 }
 
-                DB::transaction(function () use ($row, $incomeCategory, $paymentMethodMap, $import, &$created) {
-                    $totalTax = $this->readOptionalFloat($row['total_amount + tax'] ?? $row['total_amount_tax'] ?? null);
-                    $reconciled = $this->reconcileAmounts((float) $row['amount'], $totalTax);
+                DB::transaction(function () use ($row, $incomeCategory, $paymentMethodMap, $import, $reconciled, &$created) {
                     $date = !empty($row['date']) ? \Carbon\Carbon::parse($row['date']) : now();
                     $paymentMethod = $this->resolvePaymentMethod($row['payment method'] ?? $row['payment_method'] ?? null, $paymentMethodMap);
                     $proofMissing = empty($row['proof']) && empty($row['proof_path']);
