@@ -146,4 +146,20 @@ class HistoricalOrderSheetImportTest extends TestCase
             ->assertSee('July 2026')
             ->assertSee('4 to create');
     }
+
+    public function test_imported_orders_appear_in_customer_order_history(): void
+    {
+        $owner = $this->owner();
+        $service = app(DataImportService::class);
+        $service->commitOrders($service->parseFile($this->sheet(), 'csv'), $owner->id, isDryRun: false, sheetMonth: '2026-07');
+
+        $order = SalesOrder::where('source_order_number', '202607-1')->firstOrFail();
+        $this->get(route('customers.show', $order->customer))
+            ->assertOk()
+            ->assertSee('LEG-202607-1')
+            ->assertSee('Imported')
+            ->assertDontSee('No orders yet for this customer.')
+            ->assertSee('AED 386.50');
+        $this->get(route('orders.show', $order))->assertOk();
+    }
 }

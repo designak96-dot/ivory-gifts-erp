@@ -1,4 +1,12 @@
-# Update v73 — Dashboard drill-down + paid/outstanding colours (includes v71 + v72)
+# Update v74 — Customer order history shows imported orders (includes v71–v73)
+
+New in v74:
+- Customer page "Order history" now lists imported (sheet) orders too, marked "Imported".
+- Customer "Orders" card total includes imported orders.
+- Paid 0 = red / Remaining 0 = green in the customer order history.
+
+---
+Previous — v73: Dashboard drill-down + paid/outstanding colours
 
 New in v73:
 - Every dashboard box is clickable and opens only the records behind that number:
